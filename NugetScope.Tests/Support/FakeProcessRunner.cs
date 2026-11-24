@@ -2,18 +2,33 @@ using NugetScope.Core.Cli;
 
 namespace NugetScope.Tests.Support;
 
-/// <summary>Returns canned results keyed by the first CLI argument (e.g. "restore", "list").</summary>
+/// <summary>Returns canned results for dotnet invocations, matched on the command and (for list) the status flag.</summary>
 internal sealed class FakeProcessRunner : IProcessRunner
 {
-    private readonly Dictionary<string, Func<ProcessResult>> _responses = new(StringComparer.Ordinal);
+    private static readonly string[] StatusFlags = ["--outdated", "--deprecated", "--vulnerable"];
+
+    private readonly List<(Func<IReadOnlyList<string>, bool> Matches, Func<ProcessResult> Respond)> _responses = [];
+    private readonly Lock _lock = new();
 
     public List<IReadOnlyList<string>> Calls { get; } = [];
 
-    public FakeProcessRunner On(string command, ProcessResult result) => On(command, () => result);
+    public FakeProcessRunner OnRestore(ProcessResult result) =>
+        On(args => args[0] == "restore", () => result);
 
-    public FakeProcessRunner On(string command, Func<ProcessResult> result)
+    public FakeProcessRunner OnRestore(Func<ProcessResult> result) =>
+        On(args => args[0] == "restore", result);
+
+    /// <summary>The base <c>dotnet list package</c> call (no status flag).</summary>
+    public FakeProcessRunner OnList(ProcessResult result) =>
+        On(args => args[0] == "list" && !args.Any(StatusFlags.Contains), () => result);
+
+    /// <param name="statusFlag">E.g. <c>--outdated</c>.</param>
+    public FakeProcessRunner OnList(string statusFlag, ProcessResult result) =>
+        On(args => args[0] == "list" && args.Contains(statusFlag), () => result);
+
+    public FakeProcessRunner On(Func<IReadOnlyList<string>, bool> matches, Func<ProcessResult> respond)
     {
-        _responses[command] = result;
+        _responses.Add((matches, respond));
         return this;
     }
 
@@ -23,10 +38,14 @@ internal sealed class FakeProcessRunner : IProcessRunner
         string workingDirectory,
         CancellationToken cancellationToken = default)
     {
-        Calls.Add(arguments);
+        lock (_lock)
+        {
+            Calls.Add(arguments);
+        }
 
-        return _responses.TryGetValue(arguments[0], out var response)
-            ? Task.FromResult(response())
-            : throw new InvalidOperationException($"No fake response for 'dotnet {arguments[0]}'.");
+        var response = _responses.LastOrDefault(r => r.Matches(arguments)).Respond
+            ?? throw new InvalidOperationException($"No fake response for 'dotnet {string.Join(' ', arguments)}'.");
+
+        return Task.FromResult(response());
     }
 }

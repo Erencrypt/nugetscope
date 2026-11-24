@@ -1,4 +1,5 @@
 using NugetScope.Core.Packages;
+using NugetScope.Core.Solutions;
 
 namespace NugetScope.Core.Analysis;
 
@@ -22,17 +23,26 @@ public static class PackageSummaryBuilder
             .ToList();
     }
 
-    private static IReadOnlyList<PackageUsage> BuildUsages(
-        IEnumerable<(Solutions.ProjectInfo Project, PackageReference Package)> references)
+    private static IReadOnlyList<PackageUsage> BuildUsages(IEnumerable<(ProjectInfo Project, PackageReference Package)> references)
     {
         return references
             .GroupBy(x => (x.Project, x.Package.RequestedVersion, x.Package.ResolvedVersion, x.Package.IsTransitive))
-            .Select(group => new PackageUsage(
-                group.Key.Project,
-                group.Select(x => x.Package.TargetFramework).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-                group.Key.RequestedVersion,
-                group.Key.ResolvedVersion,
-                group.Key.IsTransitive))
+            .Select(group =>
+            {
+                var packages = group.Select(x => x.Package).ToList();
+
+                return new PackageUsage(
+                    group.Key.Project,
+                    packages.Select(p => p.TargetFramework).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                    group.Key.RequestedVersion,
+                    group.Key.ResolvedVersion,
+                    group.Key.IsTransitive)
+                {
+                    LatestVersion = packages.Select(p => p.LatestVersion).OfType<string>().Max(VersionStringComparer.Instance),
+                    Deprecation = packages.Select(p => p.Deprecation).FirstOrDefault(d => d is not null),
+                    Vulnerabilities = packages.SelectMany(p => p.Vulnerabilities).Distinct().ToList(),
+                };
+            })
             .OrderBy(usage => usage.Project.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(usage => usage.ResolvedVersion, VersionStringComparer.Instance)
             .ToList();

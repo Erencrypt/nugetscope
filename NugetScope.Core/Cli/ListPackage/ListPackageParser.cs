@@ -9,12 +9,10 @@ internal static class ListPackageParser
 {
     public const int SupportedOutputVersion = 1;
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     /// <exception cref="FormatException">The output is not valid list-package JSON.</exception>
     public static ListPackageReport Parse(string output)
     {
-        ListPackageJson json = Deserialize(output);
+        ListPackageDocument json = Deserialize(output);
 
         if (json.Version != SupportedOutputVersion)
         {
@@ -48,7 +46,7 @@ internal static class ListPackageParser
             solutionProblems);
     }
 
-    private static ListPackageJson Deserialize(string output)
+    private static ListPackageDocument Deserialize(string output)
     {
         // Tolerate stray lines (e.g. SDK notices) before the JSON body.
         int start = output.IndexOf('{');
@@ -59,7 +57,7 @@ internal static class ListPackageParser
 
         try
         {
-            return JsonSerializer.Deserialize<ListPackageJson>(output.AsSpan(start), JsonOptions)
+            return JsonSerializer.Deserialize(output.AsSpan(start), ListPackageJsonContext.Default.ListPackageDocument)
                 ?? throw new FormatException("dotnet list package produced empty JSON.");
         }
         catch (JsonException ex)

@@ -18,11 +18,14 @@ internal sealed class MainWindow : Window
 
     private readonly SpinnerView _spinner;
     private readonly Label _header;
+    private readonly TextField _search;
     private readonly PackageTable _packageTable;
     private readonly DetailPane _detailPane;
 
     private CancellationTokenSource? _loadCancellation;
     private SolutionScan? _scan;
+    private IReadOnlyList<PackageSummary> _allPackages = [];
+    private PackageFilter _filter = PackageFilter.None;
 
     public MainWindow(IApplication app, SolutionScanner scanner, string solutionPath)
     {
@@ -38,11 +41,15 @@ internal sealed class MainWindow : Window
         _spinner = new SpinnerView { X = 0, Y = Pos.Bottom(menuBar), Visible = false };
         _header = new Label { X = 2, Y = Pos.Bottom(menuBar), Width = Dim.Fill() };
 
+        var searchLabel = new Label { Text = "_Search:", X = 0, Y = Pos.Bottom(_header) };
+        _search = new TextField { X = Pos.Right(searchLabel) + 1, Y = Pos.Bottom(_header), Width = 30 };
+        _search.ValueChanged += (_, _) => UpdateFilter(_filter with { SearchText = _search.Text });
+
         _packageTable = new PackageTable
         {
             X = 0,
-            Y = Pos.Bottom(_header),
-            Width = Dim.Percent(55),
+            Y = Pos.Bottom(_search),
+            Width = Dim.Percent(60),
             Height = Dim.Fill(statusBar),
         };
         _packageTable.SelectedPackageChanged += (_, package) => ShowPackageDetails(package);
@@ -50,14 +57,18 @@ internal sealed class MainWindow : Window
         _detailPane = new DetailPane
         {
             X = Pos.Right(_packageTable),
-            Y = Pos.Bottom(_header),
+            Y = Pos.Bottom(_search),
             Width = Dim.Fill(),
             Height = Dim.Fill(statusBar),
         };
 
-        Add(menuBar, _spinner, _header, _packageTable, _detailPane, statusBar);
+        Add(menuBar, _spinner, _header, searchLabel, _search, _packageTable, _detailPane, statusBar);
 
-        Initialized += (_, _) => StartLoad();
+        Initialized += (_, _) =>
+        {
+            _packageTable.FocusTable();
+            StartLoad();
+        };
     }
 
     protected override void Dispose(bool disposing)
@@ -79,11 +90,22 @@ internal sealed class MainWindow : Window
             new MenuItem("_Problems", "Show restore and scan problems", ShowProblems, Key.P.WithCtrl),
             new MenuItem("_Quit", "Exit nugetscope", RequestStop, Key.Q.WithCtrl),
         ]),
+        new MenuBarItem("F_ilter",
+        [
+            new MenuItem("_Next filter", "Cycle the status filter", CycleStatusFilter, Key.F3),
+            .. Enum.GetValues<PackageStatusFilter>().Select(status => new MenuItem(
+                StatusFormatter.Describe(status),
+                $"Show {StatusFormatter.Describe(status).ToLowerInvariant()} packages",
+                () => UpdateFilter(_filter with { Status = status }),
+                Key.Empty)),
+        ]),
     ]);
 
     private StatusBar CreateStatusBar() => new(
     [
         new Shortcut(Key.F5, "Reload", StartLoad, "Scan again"),
+        new Shortcut(Key.F3, "Filter", CycleStatusFilter, "Cycle status filter"),
+        new Shortcut(Key.F.WithCtrl, "Search", () => _search.SetFocus(), "Search by id"),
         new Shortcut(Key.P.WithCtrl, "Problems", ShowProblems, "Restore/scan problems"),
         new Shortcut(Key.Q.WithCtrl, "Quit", RequestStop, "Exit"),
     ]);
@@ -140,7 +162,8 @@ internal sealed class MainWindow : Window
         _header.Text = stage switch
         {
             ScanStage.ReadingSolution => "Reading solution...",
-            ScanStage.ScanningPackages => "Restoring and listing packages (this can take a while)...",
+            ScanStage.Restoring => "Restoring packages...",
+            ScanStage.ListingPackages => "Listing packages and checking for updates, deprecations and vulnerabilities...",
             _ => "Loading...",
         };
     }
@@ -155,16 +178,23 @@ internal sealed class MainWindow : Window
     {
         StopLoading();
         _scan = scan;
+        _allPackages = PackageSummaryBuilder.Build(scan.Packages);
 
-        IReadOnlyList<PackageSummary> packages = PackageSummaryBuilder.Build(scan.Packages);
         int failedProjects = scan.Packages.Projects.Count(p => p.HasErrors);
+        string counts = StatusFormatter.FormatCounts(_allPackages);
 
-        _header.Text = $"{scan.Solution.Name} | {scan.Solution.Projects.Count} projects | {packages.Count} packages"
-            + (failedProjects > 0 ? $" | {failedProjects} project(s) with errors (Ctrl+P)" : "");
+        _header.Text = string.Join(" | ", new[]
+        {
+            scan.Solution.Name,
+            $"{scan.Solution.Projects.Count} projects",
+            $"{_allPackages.Count} packages",
+            counts,
+            failedProjects > 0 ? $"{failedProjects} project(s) with errors (Ctrl+P)" : "",
+        }.Where(part => part.Length > 0));
 
-        _packageTable.SetPackages(packages);
+        RefreshTable();
 
-        if (packages.Count == 0)
+        if (_allPackages.Count == 0)
         {
             _detailPane.ShowText(ProblemsFormatter.Count(scan.Packages) > 0
                 ? ProblemsFormatter.Format(scan.Packages)
@@ -176,16 +206,47 @@ internal sealed class MainWindow : Window
     {
         StopLoading();
         _scan = null;
+        _allPackages = [];
         _header.Text = "Scan failed. Press F5 to retry.";
-        _packageTable.SetPackages([]);
+        RefreshTable();
         _detailPane.ShowText(message);
+    }
+
+    private void CycleStatusFilter()
+    {
+        var values = Enum.GetValues<PackageStatusFilter>();
+        int next = (Array.IndexOf(values, _filter.Status) + 1) % values.Length;
+        UpdateFilter(_filter with { Status = values[next] });
+    }
+
+    private void UpdateFilter(PackageFilter filter)
+    {
+        _filter = filter;
+        RefreshTable();
+    }
+
+    private void RefreshTable()
+    {
+        IReadOnlyList<PackageSummary> visible = _filter.Apply(_allPackages);
+        PackageChecks completedChecks = _scan?.Packages.CompletedChecks ?? PackageChecks.None;
+
+        string? titleSuffix = _filter.IsActive
+            ? $"{StatusFormatter.Describe(_filter.Status)}: {visible.Count} of {_allPackages.Count}"
+            : null;
+
+        _packageTable.SetPackages(visible, completedChecks, titleSuffix);
+
+        if (visible.Count == 0 && _allPackages.Count > 0)
+        {
+            _detailPane.ShowText("No packages match the current filter.");
+        }
     }
 
     private void ShowPackageDetails(PackageSummary? package)
     {
         if (package is not null)
         {
-            _detailPane.ShowText(PackageDetailFormatter.Format(package));
+            _detailPane.ShowText(PackageDetailFormatter.Format(package, _scan?.Packages.CompletedChecks ?? PackageChecks.None));
         }
     }
 

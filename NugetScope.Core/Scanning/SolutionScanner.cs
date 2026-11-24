@@ -17,8 +17,8 @@ public sealed class SolutionScanner(ISolutionReader solutionReader, IPackageSour
         progress?.Report(ScanStage.ReadingSolution);
         SolutionInfo solution = await solutionReader.ReadAsync(solutionPath, cancellationToken).ConfigureAwait(false);
 
-        progress?.Report(ScanStage.ScanningPackages);
-        PackageScanResult packages = await packageSource.ScanAsync(solution, options, cancellationToken).ConfigureAwait(false);
+        PackageScanResult packages = await packageSource.ScanAsync(solution, options, progress, cancellationToken)
+            .ConfigureAwait(false);
 
         return new SolutionScan(solution, packages);
     }

@@ -4,7 +4,7 @@ namespace NugetScope.Core.Cli.ListPackage;
 // Kept together because they only describe one wire format. Property matching is case-insensitive
 // (the CLI emits "advisoryurl" in lowercase).
 
-internal sealed class ListPackageJson
+internal sealed class ListPackageDocument
 {
     public int Version { get; init; }
 

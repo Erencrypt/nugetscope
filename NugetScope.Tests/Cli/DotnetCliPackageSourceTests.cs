@@ -8,6 +8,8 @@ namespace NugetScope.Tests.Cli;
 
 public sealed class DotnetCliPackageSourceTests
 {
+    private const string EmptyListJson = """{ "version": 1, "projects": [] }""";
+
     private static readonly SolutionInfo Solution = new(
         FilePath: Path.GetFullPath("C:/repo/Fx.slnx"),
         Projects:
@@ -18,110 +20,164 @@ public sealed class DotnetCliPackageSourceTests
             Project("D"), // In the solution but absent from the CLI output.
         ]);
 
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
     private static ProjectInfo Project(string name) => new(name, FixtureFile.RepoProject(name), null);
 
     private static ProcessResult Ok(string stdout) => new(0, stdout, "");
 
+    private static ProcessResult Fixture(string name, int exitCode = 0) => new(exitCode, FixtureFile.Read(name), "");
+
+    /// <summary>Captured restore + no-restore list output; status checks answer "nothing flagged".</summary>
     private static FakeProcessRunner RunnerWithCapturedOutput() => new FakeProcessRunner()
-        .On("restore", new ProcessResult(1, FixtureFile.Read("DotnetRestore/restore-output.txt"), ""))
-        .On("list", new ProcessResult(1, FixtureFile.Read("DotnetList/project-problems.json"), ""));
+        .OnRestore(Fixture("DotnetRestore/restore-output.txt", exitCode: 1))
+        .OnList(Fixture("DotnetList/project-problems.json", exitCode: 1))
+        .OnList("--outdated", Ok(EmptyListJson))
+        .OnList("--deprecated", Ok(EmptyListJson))
+        .OnList("--vulnerable", Ok(EmptyListJson));
+
+    private static Task<PackageScanResult> ScanAsync(FakeProcessRunner runner, PackageScanOptions? options = null) =>
+        new DotnetCliPackageSource(runner).ScanAsync(Solution, options ?? PackageScanOptions.Default, cancellationToken: Ct);
 
     [Fact]
-    public async Task ScanAsync_RestoresThenListsWithoutRestoring()
+    public async Task ScanAsync_RestoresOnceThenRunsBaseAndStatusListsWithoutRestoring()
     {
         var runner = RunnerWithCapturedOutput();
 
-        await new DotnetCliPackageSource(runner).ScanAsync(Solution, new PackageScanOptions(IncludeTransitive: true), TestContext.Current.CancellationToken);
+        await ScanAsync(runner, new PackageScanOptions(IncludeTransitive: true));
 
-        Assert.Equal(["restore", "list"], runner.Calls.Select(c => c[0]));
-        var list = runner.Calls[1];
-        Assert.Equal(Solution.FilePath, list[1]);
-        Assert.Contains("--no-restore", list);
-        Assert.Contains("--include-transitive", list);
-        Assert.Equal("json", list[list.ToList().IndexOf("--format") + 1]);
-        Assert.Equal("1", list[list.ToList().IndexOf("--output-version") + 1]);
+        Assert.Equal("restore", runner.Calls[0][0]);
+        var lists = runner.Calls.Skip(1).ToList();
+        Assert.Equal(4, lists.Count);
+        Assert.All(lists, call =>
+        {
+            Assert.Equal("list", call[0]);
+            Assert.Equal(Solution.FilePath, call[1]);
+            Assert.Contains("--no-restore", call);
+            Assert.Contains("--include-transitive", call);
+        });
+        Assert.Contains(lists, c => c.Contains("--outdated"));
+        Assert.Contains(lists, c => c.Contains("--deprecated"));
+        Assert.Contains(lists, c => c.Contains("--vulnerable"));
     }
 
     [Fact]
-    public async Task ScanAsync_RestoreDisabled_SkipsRestore()
+    public async Task ScanAsync_NoChecksAndNoRestore_RunsOnlyBaseList()
     {
         var runner = RunnerWithCapturedOutput();
 
-        await new DotnetCliPackageSource(runner).ScanAsync(Solution, new PackageScanOptions(Restore: false), TestContext.Current.CancellationToken);
+        var result = await ScanAsync(runner, new PackageScanOptions(Restore: false, Checks: PackageChecks.None));
 
         var call = Assert.Single(runner.Calls);
         Assert.Equal("list", call[0]);
         Assert.DoesNotContain("--include-transitive", call);
+        Assert.Equal(PackageChecks.None, result.CompletedChecks);
     }
 
     [Fact]
     public async Task ScanAsync_ReturnsOneEntryPerSolutionProjectInOrder()
     {
-        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
+        var result = await ScanAsync(RunnerWithCapturedOutput());
 
         Assert.Equal(["A", "B", "C", "D"], result.Projects.Select(p => p.Project.Name));
         Assert.Same(Solution.Projects[0], result.Projects[0].Project);
     }
 
     [Fact]
-    public async Task ScanAsync_HealthyProject_HasPackagesAndNoErrors()
+    public async Task ScanAsync_AttachesListProblemsAndRestoreErrorsToProjects()
     {
-        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
+        var result = await ScanAsync(RunnerWithCapturedOutput());
 
         var a = result.Projects[0];
         Assert.False(a.HasErrors);
         Assert.Contains(a.Packages, p => p.Id == "Newtonsoft.Json");
-        // Restore warnings (NU1903) are not attached; vulnerability data comes from list --vulnerable.
-        Assert.Empty(a.Problems);
-    }
 
-    [Fact]
-    public async Task ScanAsync_AttachesListProblemsAndRestoreErrorsToProjects()
-    {
-        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
-
-        var b = result.Projects[1];
-        Assert.True(b.HasErrors);
-        Assert.Contains(b.Problems, p => p.Message.Contains("No assets file"));
-
-        var c = result.Projects[2];
-        Assert.True(c.HasErrors);
-        Assert.Contains(c.Problems, p => p.Code == "NU1101");
-
+        Assert.Contains(result.Projects[1].Problems, p => p.Message.Contains("No assets file"));
+        Assert.Contains(result.Projects[2].Problems, p => p.Code == "NU1101");
+        Assert.Equal(ProblemLevel.Warning, Assert.Single(result.Projects[3].Problems).Level);
         Assert.Empty(result.Problems);
     }
 
     [Fact]
-    public async Task ScanAsync_ProjectMissingFromOutput_GetsWarning()
+    public async Task ScanAsync_MergesStatusDataAndReportsAllChecksCompleted()
     {
-        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
+        var runner = new FakeProcessRunner()
+            .OnRestore(Ok(""))
+            .OnList(Fixture("DotnetList/transitive.json"))
+            .OnList("--outdated", Fixture("DotnetList/outdated.json"))
+            .OnList("--deprecated", Fixture("DotnetList/deprecated.json"))
+            .OnList("--vulnerable", Fixture("DotnetList/vulnerable.json"));
 
-        var d = result.Projects[3];
-        Assert.Empty(d.Packages);
-        Assert.Equal(ProblemLevel.Warning, Assert.Single(d.Problems).Level);
+        var result = await ScanAsync(runner);
+
+        var a = result.Projects[0].Packages;
+        Assert.Equal("4.4.0", a.First(p => p.Id == "Serilog").LatestVersion);
+        Assert.NotNull(a.First(p => p.Id == "WindowsAzure.Storage").Deprecation);
+        Assert.All(a.Where(p => p.Id == "Newtonsoft.Json"), p => Assert.NotEmpty(p.Vulnerabilities));
+        Assert.Equal(PackageChecks.All, result.CompletedChecks);
+    }
+
+    [Fact]
+    public async Task ScanAsync_StatusCheckWithUnreadableOutput_IsSkippedWithWarning()
+    {
+        var runner = RunnerWithCapturedOutput()
+            .OnList("--vulnerable", new ProcessResult(1, "", "Unable to load the service index"));
+
+        var result = await ScanAsync(runner);
+
+        Assert.Equal(PackageChecks.Outdated | PackageChecks.Deprecated, result.CompletedChecks);
+        var problem = Assert.Single(result.Problems);
+        Assert.Equal(ProblemLevel.Warning, problem.Level);
+        Assert.Contains("vulnerable", problem.Message);
+        Assert.NotEmpty(result.Projects[0].Packages);
+    }
+
+    [Fact]
+    public async Task ScanAsync_StatusCheckWithSolutionLevelError_IsNotCompleted()
+    {
+        const string feedError = """
+            { "version": 1, "problems": [ { "level": "error", "text": "Unable to load the service index for source https://example.invalid." } ], "projects": [] }
+            """;
+        var runner = RunnerWithCapturedOutput().OnList("--outdated", Ok(feedError));
+
+        var result = await ScanAsync(runner);
+
+        Assert.False(result.CompletedChecks.HasFlag(PackageChecks.Outdated));
+        Assert.Contains(result.Problems, p => p.Message.Contains("service index"));
+    }
+
+    [Fact]
+    public async Task ScanAsync_DuplicateProblemsAcrossCalls_AreReportedOnce()
+    {
+        var problems = Fixture("DotnetList/project-problems.json", exitCode: 1);
+        var runner = RunnerWithCapturedOutput()
+            .OnList("--outdated", problems)
+            .OnList("--deprecated", problems)
+            .OnList("--vulnerable", problems);
+
+        var result = await ScanAsync(runner);
+
+        Assert.Single(result.Projects[1].Problems, p => p.Message.Contains("No assets file"));
     }
 
     [Fact]
     public async Task ScanAsync_RestoreErrorWithoutProject_IsSolutionProblem()
     {
-        var runner = new FakeProcessRunner()
-            .On("restore", Ok("error NU1301: Unable to load the service index for source https://example.invalid/v3/index.json."))
-            .On("list", Ok(FixtureFile.Read("DotnetList/transitive.json")));
+        var runner = RunnerWithCapturedOutput()
+            .OnRestore(Ok("error NU1301: Unable to load the service index for source https://example.invalid/v3/index.json."));
 
-        var result = await new DotnetCliPackageSource(runner).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
+        var result = await ScanAsync(runner);
 
         Assert.Equal("NU1301", Assert.Single(result.Problems).Code);
     }
 
     [Fact]
-    public async Task ScanAsync_UnreadableListOutput_ThrowsWithStandardError()
+    public async Task ScanAsync_UnreadableBaseList_ThrowsWithStandardError()
     {
-        var runner = new FakeProcessRunner()
-            .On("restore", Ok(""))
-            .On("list", new ProcessResult(1, "", "MSBUILD : error MSB1009: Project file does not exist."));
+        var runner = RunnerWithCapturedOutput()
+            .OnList(new ProcessResult(1, "", "MSBUILD : error MSB1009: Project file does not exist."));
 
-        var ex = await Assert.ThrowsAsync<PackageSourceException>(
-            () => new DotnetCliPackageSource(runner).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken));
+        var ex = await Assert.ThrowsAsync<PackageSourceException>(() => ScanAsync(runner));
 
         Assert.Contains("MSB1009", ex.Message);
     }
@@ -129,10 +185,9 @@ public sealed class DotnetCliPackageSourceTests
     [Fact]
     public async Task ScanAsync_DotnetNotInstalled_ThrowsPackageSourceException()
     {
-        var runner = new FakeProcessRunner().On("restore", () => throw new Win32Exception(2, "File not found"));
+        var runner = new FakeProcessRunner().OnRestore(() => throw new Win32Exception(2, "File not found"));
 
-        var ex = await Assert.ThrowsAsync<PackageSourceException>(
-            () => new DotnetCliPackageSource(runner).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken));
+        var ex = await Assert.ThrowsAsync<PackageSourceException>(() => ScanAsync(runner));
 
         Assert.IsType<Win32Exception>(ex.InnerException);
     }

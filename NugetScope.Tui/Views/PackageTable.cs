@@ -1,4 +1,6 @@
 using NugetScope.Core.Analysis;
+using NugetScope.Core.Packages;
+using NugetScope.Tui.Formatting;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -7,21 +9,16 @@ namespace NugetScope.Tui.Views;
 /// <summary>Framed table of packages, one row per package id.</summary>
 internal sealed class PackageTable : FrameView
 {
-    private static readonly Dictionary<string, Func<PackageSummary, object>> Columns = new()
-    {
-        ["Package"] = s => s.Id,
-        ["Version(s)"] = s => string.Join(", ", s.ResolvedVersions),
-        ["Projects"] = s => s.ProjectCount,
-    };
+    private const string BaseTitle = "Packages";
 
     private readonly TableView _table;
     private EnumerableTableSource<PackageSummary> _source;
 
     public PackageTable()
     {
-        Title = "Packages";
+        Title = BaseTitle;
 
-        _source = CreateSource([]);
+        _source = CreateSource([], PackageChecks.None);
         _table = new TableView(_source)
         {
             Width = Dim.Fill(),
@@ -41,16 +38,30 @@ internal sealed class PackageTable : FrameView
             ? _source.GetObjectOnRow(row)
             : null;
 
-    public void SetPackages(IReadOnlyList<PackageSummary> packages)
+    /// <param name="titleSuffix">Shown after the frame title, e.g. the active filter.</param>
+    public void SetPackages(IReadOnlyList<PackageSummary> packages, PackageChecks completedChecks, string? titleSuffix = null)
     {
-        _source = CreateSource(packages);
+        Title = titleSuffix is null ? BaseTitle : $"{BaseTitle} ({titleSuffix})";
+
+        _source = CreateSource(packages, completedChecks);
         _table.Table = _source;
         _table.Update();
         RaiseSelectionChanged();
     }
 
-    private static EnumerableTableSource<PackageSummary> CreateSource(IReadOnlyList<PackageSummary> packages) =>
-        new(packages, Columns);
+    public void FocusTable() => _table.SetFocus();
+
+    private static EnumerableTableSource<PackageSummary> CreateSource(
+        IReadOnlyList<PackageSummary> packages,
+        PackageChecks completedChecks) =>
+        new(packages, new Dictionary<string, Func<PackageSummary, object>>
+        {
+            ["Package"] = p => p.Id,
+            ["Version(s)"] = p => string.Join(", ", p.ResolvedVersions),
+            ["Latest"] = p => StatusFormatter.FormatLatest(p, completedChecks),
+            ["Status"] = p => StatusFormatter.FormatStatus(p, completedChecks),
+            ["Projects"] = p => p.ProjectCount,
+        });
 
     private void RaiseSelectionChanged() => SelectedPackageChanged?.Invoke(this, SelectedPackage);
 }

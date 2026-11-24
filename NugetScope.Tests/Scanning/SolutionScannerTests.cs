@@ -25,7 +25,8 @@ public sealed class SolutionScannerTests
         Assert.Same(Solution, scan.Solution);
         Assert.Same(expectedPackages, scan.Packages);
         Assert.Same(Solution, source.ScannedSolution);
-        Assert.Equal([ScanStage.ReadingSolution, ScanStage.ScanningPackages], stages);
+        // The scanner reports its own stage and passes the reporter through to the package source.
+        Assert.Equal([ScanStage.ReadingSolution, ScanStage.ListingPackages], stages);
     }
 
     [Fact]
@@ -59,9 +60,11 @@ public sealed class SolutionScannerTests
         public Task<PackageScanResult> ScanAsync(
             SolutionInfo solution,
             PackageScanOptions options,
+            IProgress<ScanStage>? progress = null,
             CancellationToken cancellationToken = default)
         {
             ScannedSolution = solution;
+            progress?.Report(ScanStage.ListingPackages);
             return Task.FromResult(result);
         }
     }
