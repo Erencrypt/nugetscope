@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "parameters": "",
+  "problems": [
+    {
+      "project": "C:/repo/B/B.csproj",
+      "level": "error",
+      "text": "No assets file was found for `C:/repo/B/B.csproj`. Run restore before running this command."
+    }
+  ],
+  "projects": [
+    {
+      "path": "C:/repo/A/A.csproj",
+      "frameworks": [
+        {
+          "framework": "netstandard2.0",
+          "topLevelPackages": [
+            {
+              "id": "NETStandard.Library",
+              "requestedVersion": "[2.0.3, )",
+              "resolvedVersion": "2.0.3",
+              "autoReferenced": "true"
+            },
+            {
+              "id": "Newtonsoft.Json",
+              "requestedVersion": "12.0.1",
+              "resolvedVersion": "12.0.1"
+            },
+            {
+              "id": "Serilog",
+              "requestedVersion": "3.*",
+              "resolvedVersion": "3.1.1"
+            },
+            {
+              "id": "WindowsAzure.Storage",
+              "requestedVersion": "9.3.3",
+              "resolvedVersion": "9.3.3"
+            }
+          ]
+        },
+        {
+          "framework": "net8.0",
+          "topLevelPackages": [
+            {
+              "id": "Humanizer.Core",
+              "requestedVersion": "[2.14.1]",
+              "resolvedVersion": "2.14.1"
+            },
+            {
+              "id": "Newtonsoft.Json",
+              "requestedVersion": "12.0.1",
+              "resolvedVersion": "12.0.1"
+            },
+            {
+              "id": "Serilog",
+              "requestedVersion": "3.*",
+              "resolvedVersion": "3.1.1"
+            },
+            {
+              "id": "WindowsAzure.Storage",
+              "requestedVersion": "9.3.3",
+              "resolvedVersion": "9.3.3"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "C:/repo/B/B.csproj"
+    },
+    {
+      "path": "C:/repo/C/C.csproj",
+      "frameworks": [
+        {
+          "framework": "net8.0"
+        }
+      ]
+    }
+  ]
+}

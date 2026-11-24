@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "parameters": "--outdated",
+  "sources": [
+    "https://api.nuget.org/v3/index.json",
+    "C:/Program Files (x86)/Microsoft SDKs/NuGetPackages/"
+  ],
+  "projects": [
+    {
+      "path": "C:/repo/A/A.csproj",
+      "frameworks": [
+        {
+          "framework": "netstandard2.0",
+          "topLevelPackages": [
+            {
+              "id": "Newtonsoft.Json",
+              "requestedVersion": "12.0.1",
+              "resolvedVersion": "12.0.1",
+              "latestVersion": "13.0.4"
+            },
+            {
+              "id": "Serilog",
+              "requestedVersion": "3.*",
+              "resolvedVersion": "3.1.1",
+              "latestVersion": "4.4.0"
+            }
+          ]
+        },
+        {
+          "framework": "net8.0",
+          "topLevelPackages": [
+            {
+              "id": "Humanizer.Core",
+              "requestedVersion": "[2.14.1]",
+              "resolvedVersion": "2.14.1",
+              "latestVersion": "3.0.10"
+            },
+            {
+              "id": "Newtonsoft.Json",
+              "requestedVersion": "12.0.1",
+              "resolvedVersion": "12.0.1",
+              "latestVersion": "13.0.4"
+            },
+            {
+              "id": "Serilog",
+              "requestedVersion": "3.*",
+              "resolvedVersion": "3.1.1",
+              "latestVersion": "4.4.0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "C:/repo/B/B.csproj",
+      "frameworks": [
+        {
+          "framework": "net8.0",
+          "topLevelPackages": [
+            {
+              "id": "Newtonsoft.Json",
+              "requestedVersion": "13.0.3",
+              "resolvedVersion": "13.0.3",
+              "latestVersion": "13.0.4"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

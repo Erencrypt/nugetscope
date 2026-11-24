@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.SolutionPersistence.Model;
 using Microsoft.VisualStudio.SolutionPersistence.Serializer;
+using NugetScope.Core.IO;
 
 namespace NugetScope.Core.Solutions;
 
@@ -46,12 +47,9 @@ public sealed class SolutionReader : ISolutionReader
         return new SolutionInfo(fullPath, projects);
     }
 
-    private static string ResolveProjectPath(string solutionDirectory, string projectPath)
-    {
-        // .sln files store Windows separators; normalize so paths resolve on any OS.
-        string normalized = projectPath.Replace('\\', Path.DirectorySeparatorChar);
-        return Path.GetFullPath(Path.Combine(solutionDirectory, normalized));
-    }
+    // .sln files store Windows separators; normalize so paths resolve on any OS.
+    private static string ResolveProjectPath(string solutionDirectory, string projectPath) =>
+        PathNormalizer.Normalize(Path.Combine(solutionDirectory, projectPath));
 
     private static string? ToFolderPath(SolutionFolderModel? folder)
     {

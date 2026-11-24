@@ -1,4 +1,5 @@
 using NugetScope.Core.Solutions;
+using NugetScope.Tests.Support;
 
 namespace NugetScope.Tests.Solutions;
 

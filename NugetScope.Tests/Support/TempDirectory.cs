@@ -1,4 +1,4 @@
-namespace NugetScope.Tests;
+namespace NugetScope.Tests.Support;
 
 /// <summary>A unique temp directory that is deleted on dispose.</summary>
 internal sealed class TempDirectory : IDisposable

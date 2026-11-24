@@ -10,4 +10,8 @@
     <PackageReference Include="Microsoft.VisualStudio.SolutionPersistence" Version="1.0.52" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="NugetScope.Tests" />
+  </ItemGroup>
+
 </Project>

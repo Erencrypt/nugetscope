@@ -1,0 +1,2 @@
+C:\repo\A\A.csproj : warning NU1903: Package 'Newtonsoft.Json' 12.0.1 has a known high severity vulnerability, https://github.com/advisories/GHSA-5crp-9r3c-p9vr [C:\repo\Fx.slnx]
+C:\repo\C\C.csproj : error NU1101: Unable to find package Nugetscope.Does.Not.Exist.Xyz. No packages exist with this id in source(s): C:\Program Files\dotnet\library-packs, Microsoft Visual Studio Offline Packages, nuget.org [C:\repo\Fx.slnx]
