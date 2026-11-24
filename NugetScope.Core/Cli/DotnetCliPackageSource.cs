@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using NugetScope.Core.Cli.ListPackage;
 using NugetScope.Core.Cli.Restore;
 using NugetScope.Core.Packages;
@@ -15,8 +14,6 @@ namespace NugetScope.Core.Cli;
 /// </summary>
 public sealed class DotnetCliPackageSource(IProcessRunner processRunner) : IPackageSource
 {
-    private const string DotnetExecutable = "dotnet";
-
     public async Task<PackageScanResult> ScanAsync(
         SolutionInfo solution,
         PackageScanOptions options,
@@ -121,21 +118,11 @@ public sealed class DotnetCliPackageSource(IProcessRunner processRunner) : IPack
         }
     }
 
-    private async Task<ProcessResult> RunDotnetAsync(
+    private Task<ProcessResult> RunDotnetAsync(
         IReadOnlyList<string> arguments,
         SolutionInfo solution,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await processRunner.RunAsync(DotnetExecutable, arguments, solution.DirectoryPath, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (Win32Exception ex)
-        {
-            throw new PackageSourceException("Could not start the dotnet CLI. Is the .NET SDK installed and on PATH?", ex);
-        }
-    }
+        CancellationToken cancellationToken) =>
+        DotnetCommand.RunAsync(processRunner, arguments, solution.DirectoryPath, cancellationToken);
 
     private static string Describe(ListPackageQuery query) => query switch
     {

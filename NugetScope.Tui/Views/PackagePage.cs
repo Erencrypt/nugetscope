@@ -45,6 +45,8 @@ internal sealed class PackagePage : View
 
     public PackageStatusFilter Status { get; }
 
+    public DashboardRow? SelectedRow => _panel.SelectedRow;
+
     /// <summary>Shows a message instead of details (e.g. scan errors or problems).</summary>
     public void ShowMessage(string message) => _details.ShowText(message);
 

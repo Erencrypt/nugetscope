@@ -1,5 +1,6 @@
 using NugetScope.Core.Analysis;
 using NugetScope.Core.Packages;
+using NugetScope.Core.Solutions;
 
 namespace NugetScope.Tui.Rows;
 
@@ -13,4 +14,5 @@ internal sealed class ProjectPackageRow(ProjectPackage package) : DashboardRow
     public override VulnerabilitySeverity? HighestSeverity => package.HighestSeverity;
     public override int? Count => null;
     public override PackageSummary Package => package.Package;
+    public override IReadOnlyList<ProjectInfo> UpdateProjects { get; } = package.Usages.Select(u => u.Project).Distinct().ToList();
 }

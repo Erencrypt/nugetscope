@@ -1,9 +1,11 @@
 using NugetScope.Core.Analysis;
 using NugetScope.Core.Packages;
 using NugetScope.Core.Scanning;
+using NugetScope.Core.Solutions;
 using NugetScope.Tui.Formatting;
 using NugetScope.Tui.State;
 using NugetScope.Tui.Threading;
+using NugetScope.Tui.Updates;
 using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
@@ -17,6 +19,7 @@ internal sealed class MainWindow : Window
     private readonly IApplication _app;
     private readonly SolutionScanner _scanner;
     private readonly string _solutionPath;
+    private readonly PackageUpdateFlow _updateFlow;
 
     private readonly DashboardState _state = new();
     private readonly Tabs _tabs;
@@ -26,11 +29,15 @@ internal sealed class MainWindow : Window
     private bool _tabHeadersStale;
     private readonly TextSpinner _spinner;
     private string _headerText = "";
+    private string _summaryText = "";
+    private bool _isLoading;
+    private bool _isUpdating;
 
-    public MainWindow(IApplication app, SolutionScanner scanner, string solutionPath)
+    public MainWindow(IApplication app, SolutionScanner scanner, PackageUpdateFlow updateFlow, string solutionPath)
     {
         _app = app;
         _scanner = scanner;
+        _updateFlow = updateFlow;
         _solutionPath = solutionPath;
 
         // A SpinnerView can't sit inside a border title, so the title text carries the spinner frame.
@@ -128,6 +135,10 @@ internal sealed class MainWindow : Window
             new MenuItem("_Problems", "Show restore and scan problems", ShowProblems, Key.P.WithCtrl),
             new MenuItem("_Quit", "Exit nugetscope", RequestStop, Key.Q.WithCtrl),
         ]),
+        new MenuBarItem("_Package",
+        [
+            new MenuItem("_Update...", "Update the selected package, after confirming the exact changes", StartUpdate, Key.U.WithCtrl),
+        ]),
         new MenuBarItem("_View",
         [
             new MenuItem("_Search", "Search this tab", () => CurrentPage.FocusSearch(), Key.F.WithCtrl),
@@ -149,6 +160,7 @@ internal sealed class MainWindow : Window
         new Shortcut(Key.F.WithCtrl, "Search", () => CurrentPage.FocusSearch()),
         new Shortcut(Key.O.WithCtrl, "Details", () => CurrentPage.ToggleDetailsFocus()),
         new Shortcut(Key.G.WithCtrl, "Group", _state.ToggleGrouping),
+        new Shortcut(Key.U.WithCtrl, "Update", StartUpdate),
         new Shortcut(Key.P.WithCtrl, "Problems", ShowProblems),
         new Shortcut(Key.Q.WithCtrl, "Quit", RequestStop),
     ]);
@@ -208,6 +220,7 @@ internal sealed class MainWindow : Window
 
     private void SetLoading(ScanStage stage)
     {
+        _isLoading = true;
         _spinner.Start();
         HeaderText = stage switch
         {
@@ -220,13 +233,14 @@ internal sealed class MainWindow : Window
 
     private void ShowScan(SolutionScan scan)
     {
+        _isLoading = false;
         _spinner.Stop();
         _state.Load(scan);
 
         int packageCount = _state.Packages.Count;
         int failedProjects = scan.Packages.Projects.Count(p => p.HasErrors);
 
-        HeaderText = string.Join(" | ", new[]
+        HeaderText = _summaryText = string.Join(" | ", new[]
         {
             scan.Solution.Name,
             $"{scan.Solution.Projects.Count} projects",
@@ -244,11 +258,61 @@ internal sealed class MainWindow : Window
 
     private void ShowError(string message)
     {
+        _isLoading = false;
         _spinner.Stop();
         _state.Clear();
-        HeaderText = "Scan failed. Press F5 to retry.";
+        HeaderText = _summaryText = "Scan failed. Press F5 to retry.";
 
         _pages[0].ShowMessage(message);
+    }
+
+    // The flow runs in the background and shows its own dialogs; a successful update rescans (and restores).
+    private void StartUpdate()
+    {
+        if (_isLoading || _isUpdating)
+        {
+            MessageBox.Query(_app, "Update", "Wait for the current scan or update to finish.", "_OK");
+            return;
+        }
+
+        if (CurrentPage.SelectedRow is not { Package: { } package, UpdateProjects.Count: > 0 } row)
+        {
+            MessageBox.Query(_app, "Update", "Select a package to update.", "_OK");
+            return;
+        }
+
+        _isUpdating = true;
+        _ = UpdateAsync(package, row.UpdateProjects);
+    }
+
+    private async Task UpdateAsync(PackageSummary package, IReadOnlyList<ProjectInfo> projects)
+    {
+        string solutionDirectory = Path.GetDirectoryName(Path.GetFullPath(_solutionPath))!;
+        bool applied = await Task.Run(() => _updateFlow.RunAsync(package, projects, solutionDirectory, SetBusy)).ConfigureAwait(false);
+
+        _app.Invoke(() =>
+        {
+            _isUpdating = false;
+            if (applied)
+            {
+                StartLoad();
+            }
+        });
+    }
+
+    // Busy text with the spinner, or back to the solution summary when null.
+    private void SetBusy(string? text)
+    {
+        if (text is null)
+        {
+            _spinner.Stop();
+            HeaderText = _summaryText;
+        }
+        else
+        {
+            _spinner.Start();
+            HeaderText = text;
+        }
     }
 
     private void ShowProblems()

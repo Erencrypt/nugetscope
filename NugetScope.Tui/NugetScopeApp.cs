@@ -1,7 +1,9 @@
 using NugetScope.Core.Cli;
 using NugetScope.Core.Scanning;
 using NugetScope.Core.Solutions;
+using NugetScope.Core.Updates;
 using NugetScope.Tui.Dialogs;
+using NugetScope.Tui.Updates;
 using NugetScope.Tui.Views;
 using Terminal.Gui.App;
 
@@ -37,11 +39,14 @@ internal static class NugetScopeApp
             return 0; // Picker cancelled.
         }
 
-        var scanner = new SolutionScanner(
-            new SolutionReader(),
-            new DotnetCliPackageSource(new ProcessRunner()));
+        var processRunner = new ProcessRunner();
+        var scanner = new SolutionScanner(new SolutionReader(), new DotnetCliPackageSource(processRunner));
+        var updateFlow = new PackageUpdateFlow(
+            app,
+            new DotnetCliPackageVersionSource(processRunner),
+            new PackageUpdatePlanner(new DotnetCliProjectEvaluator(processRunner)));
 
-        using var window = new MainWindow(app, scanner, solutionPath);
+        using var window = new MainWindow(app, scanner, updateFlow, solutionPath);
         app.Run(window);
 
         return 0;
