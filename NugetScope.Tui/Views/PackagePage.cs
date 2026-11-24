@@ -34,6 +34,7 @@ internal sealed class PackagePage : View
         };
         _panel.SelectedRowChanged += (_, row) => ShowDetails(row);
         _panel.UpFromSearch += (_, _) => FocusOwnTabHeader();
+        _panel.PackageAccepted += (_, _) => UpdateRequested?.Invoke(this, EventArgs.Empty);
 
         _details = new DetailPane { X = Pos.Right(_panel), Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
 
@@ -46,6 +47,9 @@ internal sealed class PackagePage : View
     public PackageStatusFilter Status { get; }
 
     public DashboardRow? SelectedRow => _panel.SelectedRow;
+
+    /// <summary>Enter on a package row: the user wants to update the selected package.</summary>
+    public event EventHandler? UpdateRequested;
 
     /// <summary>Shows a message instead of details (e.g. scan errors or problems).</summary>
     public void ShowMessage(string message) => _details.ShowText(message);

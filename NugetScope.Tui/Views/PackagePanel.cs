@@ -66,6 +66,16 @@ internal sealed class PackagePanel : FrameView
         _table.Style.ShowVerticalCellLineForLastColumn = false;
         _table.ValueChanged += (_, _) => SelectedRowChanged?.Invoke(this, SelectedRow);
 
+        // Enter (or double-click) on a package row opens the update; project rows keep the table's own behaviour.
+        _table.Accepting += (_, e) =>
+        {
+            if (SelectedRow is { Package: not null } row && PackageAccepted is not null)
+            {
+                e.Handled = true;
+                PackageAccepted.Invoke(this, row);
+            }
+        };
+
         Add(searchLabel, _search, _table);
     }
 
@@ -76,6 +86,9 @@ internal sealed class PackagePanel : FrameView
 
     /// <summary>Raised with the newly selected row, or null when nothing is selected.</summary>
     public event EventHandler<DashboardRow?>? SelectedRowChanged;
+
+    /// <summary>Raised when Enter is pressed (or a row double-clicked) on a package row.</summary>
+    public event EventHandler<DashboardRow>? PackageAccepted;
 
     public DashboardRow? SelectedRow =>
         _table.Value?.SelectedCell.Y is int row && row >= 0 && row < _source.Rows ? _source.GetObjectOnRow(row) : null;

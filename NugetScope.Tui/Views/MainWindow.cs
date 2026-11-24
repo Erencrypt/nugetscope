@@ -63,6 +63,7 @@ internal sealed class MainWindow : Window
         {
             page.Border.Thickness = page.Border.Thickness with { Left = 0, Right = 0, Bottom = 0 };
             IgnoreUpOnTabHeader(page);
+            page.UpdateRequested += (_, _) => StartUpdate();
         }
 
         // Tabs binds Up to "previous tab". Without it, Up falls through to Terminal.Gui's app-wide Up
