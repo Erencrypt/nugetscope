@@ -7,7 +7,7 @@ namespace NugetScope.Tui.Export;
 /// The stock save dialog, with one change to what Save does. Highlighting a row copies its path into the path box,
 /// and Save only reads that box, so stock behaviour is: a folder row makes Save do nothing (a folder isn't a .md
 /// file) and a file row overwrites that file. Here a highlighted folder saves the report inside it, and a highlighted
-/// file or ".." saves it in the shown folder; only a file name the user typed is used as is.
+/// file saves it in the shown folder; ".." stays stock and a file name the user typed is used as is.
 /// </summary>
 internal sealed class ReportSaveDialog : SaveDialog
 {
@@ -62,13 +62,35 @@ internal sealed class ReportSaveDialog : SaveDialog
 
         if (Directory.Exists(Path))
         {
-            // A folder row, or ".." (which puts the shown folder in the box).
-            Path = System.IO.Path.Combine(Path, _fileName);
+            // A folder row. ".." (which puts the shown folder in the box) keeps the stock behaviour: nothing happens.
+            if (!IsParentRowSelected())
+            {
+                Path = System.IO.Path.Combine(Path, _fileName);
+            }
         }
         else if (File.Exists(Path) && System.IO.Path.GetDirectoryName(Path) is { } folder)
         {
             // A file row: never overwrite it by implication.
             Path = System.IO.Path.Combine(folder, _fileName);
         }
+    }
+
+    // The ".." row's first cell is exactly ".." (no icon); the table sits inside a container, so search the tree.
+    private bool IsParentRowSelected() =>
+        FindTable(this) is { Table: { } table, Value: { } selection }
+        && selection.SelectedCell.Y >= 0 && selection.SelectedCell.Y < table.Rows
+        && table[selection.SelectedCell.Y, 0] as string == "..";
+
+    private static TableView? FindTable(Terminal.Gui.ViewBase.View view)
+    {
+        foreach (var child in view.SubViews)
+        {
+            if ((child as TableView ?? FindTable(child)) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
     }
 }
