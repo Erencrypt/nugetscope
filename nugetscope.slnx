@@ -1,1 +1,5 @@
-<Solution />
+<Solution>
+  <Project Path="NugetScope.Core/NugetScope.Core.csproj" />
+  <Project Path="NugetScope.Tui/NugetScope.Tui.csproj" />
+  <Project Path="NugetScope.Tests/NugetScope.Tests.csproj" />
+</Solution>
