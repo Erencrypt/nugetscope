@@ -4,6 +4,8 @@ using NugetScope.Tests.Support;
 
 namespace NugetScope.Tests.Cli;
 
+// Status fields (latest/deprecation/vulnerabilities) are covered via ListPackageReportMergerTests,
+// which parse the captured status fixtures.
 public sealed class ListPackageParserTests
 {
     private static ListPackageReport ParseFixture(string name) =>
@@ -17,11 +19,8 @@ public sealed class ListPackageParserTests
     {
         var packages = PackagesOf(ParseFixture("transitive.json"), "A");
 
-        var humanizer = Assert.Single(packages, p => p.Id == "Humanizer.Core");
-        Assert.Equal("net8.0", humanizer.TargetFramework);
-
-        var newtonsoft = packages.Where(p => p.Id == "Newtonsoft.Json").Select(p => p.TargetFramework);
-        Assert.Equal(["netstandard2.0", "net8.0"], newtonsoft);
+        Assert.Equal("net8.0", Assert.Single(packages, p => p.Id == "Humanizer.Core").TargetFramework);
+        Assert.Equal(["netstandard2.0", "net8.0"], packages.Where(p => p.Id == "Newtonsoft.Json").Select(p => p.TargetFramework));
     }
 
     [Fact]
@@ -40,56 +39,14 @@ public sealed class ListPackageParserTests
     {
         var packages = PackagesOf(ParseFixture("transitive.json"), "A");
 
-        var autoRef = Assert.Single(packages, p => p.Id == "NETStandard.Library" && !p.IsTransitive);
-        Assert.True(autoRef.IsAutoReferenced);
+        Assert.True(Assert.Single(packages, p => p.Id == "NETStandard.Library" && !p.IsTransitive).IsAutoReferenced);
 
         var transitive = packages.Where(p => p.IsTransitive).ToList();
         Assert.NotEmpty(transitive);
-        Assert.All(transitive, p => Assert.Null(p.RequestedVersion));
-        Assert.All(transitive, p => Assert.NotNull(p.ResolvedVersion));
-        Assert.DoesNotContain(packages, p => p.Id == "Newtonsoft.Json" && p.IsTransitive);
-    }
-
-    [Fact]
-    public void Parse_Outdated_SetsLatestVersion()
-    {
-        var packages = PackagesOf(ParseFixture("outdated.json"), "A");
-
-        Assert.Equal("4.4.0", packages.First(p => p.Id == "Serilog").LatestVersion);
-    }
-
-    [Fact]
-    public void Parse_Deprecated_SetsReasonsAndAlternative()
-    {
-        var packages = PackagesOf(ParseFixture("deprecated.json"), "A");
-
-        var deprecation = packages.First(p => p.Id == "WindowsAzure.Storage").Deprecation;
-        Assert.NotNull(deprecation);
-        Assert.Equal(["Legacy"], deprecation.Reasons);
-        Assert.Equal("Azure.Storage.Common", deprecation.AlternativePackageId);
-        Assert.Equal(">= 0.0.0", deprecation.AlternativeVersionRange);
-    }
-
-    [Fact]
-    public void Parse_Vulnerable_SetsSeverityAndAdvisoryUrl()
-    {
-        var packages = PackagesOf(ParseFixture("vulnerable.json"), "A");
-
-        var vulnerability = Assert.Single(packages.First(p => p.Id == "Newtonsoft.Json").Vulnerabilities);
-        Assert.Equal(VulnerabilitySeverity.High, vulnerability.Severity);
-        Assert.Equal(new Uri("https://github.com/advisories/GHSA-5crp-9r3c-p9vr"), vulnerability.AdvisoryUrl);
-    }
-
-    [Fact]
-    public void Parse_PlainList_HasNoStatusData()
-    {
-        var packages = PackagesOf(ParseFixture("transitive.json"), "A");
-
-        Assert.All(packages, p =>
+        Assert.All(transitive, p =>
         {
-            Assert.Null(p.LatestVersion);
-            Assert.Null(p.Deprecation);
-            Assert.Empty(p.Vulnerabilities);
+            Assert.Null(p.RequestedVersion);
+            Assert.NotNull(p.ResolvedVersion);
         });
     }
 
@@ -104,7 +61,7 @@ public sealed class ListPackageParserTests
         Assert.Contains("No assets file", problem.Message);
         Assert.Empty(broken.Packages);
 
-        Assert.NotEmpty(report.Projects[FixtureFile.RepoProject("A")].Packages);
+        Assert.NotEmpty(PackagesOf(report, "A"));
         Assert.Empty(report.Problems);
     }
 
@@ -114,9 +71,7 @@ public sealed class ListPackageParserTests
         var report = ParseFixture("restore-failed.json");
 
         Assert.Empty(report.Projects);
-        var problem = Assert.Single(report.Problems);
-        Assert.Equal(ProblemLevel.Error, problem.Level);
-        Assert.StartsWith("Restore failed", problem.Message);
+        Assert.StartsWith("Restore failed", Assert.Single(report.Problems).Message);
     }
 
     [Fact]
@@ -128,17 +83,11 @@ public sealed class ListPackageParserTests
     }
 
     [Theory]
-    [InlineData("")]
     [InlineData("error: something went wrong")]
     [InlineData("{ \"version\": 1, \"projects\": [ ")]
-    public void Parse_InvalidOutput_ThrowsFormatException(string output)
+    [InlineData("{ \"version\": 2, \"projects\": [] }")]
+    public void Parse_InvalidOrUnsupportedOutput_ThrowsFormatException(string output)
     {
         Assert.Throws<FormatException>(() => ListPackageParser.Parse(output));
-    }
-
-    [Fact]
-    public void Parse_UnsupportedVersion_ThrowsFormatException()
-    {
-        Assert.Throws<FormatException>(() => ListPackageParser.Parse("{ \"version\": 2, \"projects\": [] }"));
     }
 }

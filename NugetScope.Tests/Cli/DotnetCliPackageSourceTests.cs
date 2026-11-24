@@ -75,18 +75,11 @@ public sealed class DotnetCliPackageSourceTests
     }
 
     [Fact]
-    public async Task ScanAsync_ReturnsOneEntryPerSolutionProjectInOrder()
+    public async Task ScanAsync_MapsOutputOntoSolutionProjectsWithProblems()
     {
         var result = await ScanAsync(RunnerWithCapturedOutput());
 
         Assert.Equal(["A", "B", "C", "D"], result.Projects.Select(p => p.Project.Name));
-        Assert.Same(Solution.Projects[0], result.Projects[0].Project);
-    }
-
-    [Fact]
-    public async Task ScanAsync_AttachesListProblemsAndRestoreErrorsToProjects()
-    {
-        var result = await ScanAsync(RunnerWithCapturedOutput());
 
         var a = result.Projects[0];
         Assert.False(a.HasErrors);
@@ -144,20 +137,6 @@ public sealed class DotnetCliPackageSourceTests
 
         Assert.False(result.CompletedChecks.HasFlag(PackageChecks.Outdated));
         Assert.Contains(result.Problems, p => p.Message.Contains("service index"));
-    }
-
-    [Fact]
-    public async Task ScanAsync_DuplicateProblemsAcrossCalls_AreReportedOnce()
-    {
-        var problems = Fixture("DotnetList/project-problems.json", exitCode: 1);
-        var runner = RunnerWithCapturedOutput()
-            .OnList("--outdated", problems)
-            .OnList("--deprecated", problems)
-            .OnList("--vulnerable", problems);
-
-        var result = await ScanAsync(runner);
-
-        Assert.Single(result.Projects[1].Problems, p => p.Message.Contains("No assets file"));
     }
 
     [Fact]

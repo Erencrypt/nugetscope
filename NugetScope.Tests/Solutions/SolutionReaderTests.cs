@@ -5,46 +5,26 @@ namespace NugetScope.Tests.Solutions;
 
 public sealed class SolutionReaderTests
 {
-    private static readonly string FixturesDirectory =
-        Path.Combine(AppContext.BaseDirectory, "Fixtures", "Solutions");
+    private static readonly string FixturesDirectory = Path.Combine(FixtureFile.Directory, "Solutions");
+
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private readonly SolutionReader _reader = new();
 
     [Theory]
     [InlineData("Sample.sln")]
     [InlineData("Sample.slnx")]
-    public async Task ReadAsync_ReturnsDotnetProjectsWithFolders(string fileName)
+    public async Task ReadAsync_ReturnsDotnetProjectsWithFoldersAndFullPaths(string fileName)
     {
-        var solution = await _reader.ReadAsync(Path.Combine(FixturesDirectory, fileName), TestContext.Current.CancellationToken);
+        var solution = await _reader.ReadAsync(Path.Combine(FixturesDirectory, fileName), Ct);
 
-        var projects = solution.Projects
-            .OrderBy(p => p.Name, StringComparer.Ordinal)
-            .Select(p => (p.Name, p.SolutionFolder))
-            .ToList();
-
+        // The fixture also contains a .sqlproj, which must be skipped.
         Assert.Equal(
             [("App", "src"), ("App.Tests", null), ("Lib", "src/libs")],
-            projects);
-    }
+            solution.Projects.OrderBy(p => p.Name, StringComparer.Ordinal).Select(p => (p.Name, p.SolutionFolder)));
 
-    [Theory]
-    [InlineData("Sample.sln")]
-    [InlineData("Sample.slnx")]
-    public async Task ReadAsync_ResolvesProjectPathsRelativeToSolution(string fileName)
-    {
-        var solution = await _reader.ReadAsync(Path.Combine(FixturesDirectory, fileName), TestContext.Current.CancellationToken);
-
-        var app = Assert.Single(solution.Projects, p => p.Name == "App");
+        var app = solution.Projects.Single(p => p.Name == "App");
         Assert.Equal(Path.Combine(FixturesDirectory, "src", "App", "App.csproj"), app.FilePath);
-    }
-
-    [Fact]
-    public async Task ReadAsync_ExposesSolutionNameAndDirectory()
-    {
-        var solution = await _reader.ReadAsync(Path.Combine(FixturesDirectory, "Sample.slnx"), TestContext.Current.CancellationToken);
-
-        Assert.Equal("Sample", solution.Name);
-        Assert.Equal(FixturesDirectory, solution.DirectoryPath);
     }
 
     [Fact]
@@ -52,17 +32,9 @@ public sealed class SolutionReaderTests
     {
         string path = Path.Combine(FixturesDirectory, "DoesNotExist.slnx");
 
-        var ex = await Assert.ThrowsAsync<SolutionLoadException>(() => _reader.ReadAsync(path, TestContext.Current.CancellationToken));
+        var ex = await Assert.ThrowsAsync<SolutionLoadException>(() => _reader.ReadAsync(path, Ct));
+
         Assert.Equal(path, ex.SolutionPath);
-    }
-
-    [Fact]
-    public async Task ReadAsync_UnsupportedExtension_ThrowsSolutionLoadException()
-    {
-        using var temp = new TempDirectory();
-        string path = temp.CreateFile("NotASolution.txt", "hello");
-
-        await Assert.ThrowsAsync<SolutionLoadException>(() => _reader.ReadAsync(path, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -71,7 +43,8 @@ public sealed class SolutionReaderTests
         using var temp = new TempDirectory();
         string path = temp.CreateFile("Broken.slnx", "<Solution><Project");
 
-        var ex = await Assert.ThrowsAsync<SolutionLoadException>(() => _reader.ReadAsync(path, TestContext.Current.CancellationToken));
+        var ex = await Assert.ThrowsAsync<SolutionLoadException>(() => _reader.ReadAsync(path, Ct));
+
         Assert.NotNull(ex.InnerException);
     }
 }

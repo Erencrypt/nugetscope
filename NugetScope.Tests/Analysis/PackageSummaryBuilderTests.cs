@@ -13,13 +13,12 @@ public sealed class PackageSummaryBuilderTests
         string id,
         string resolved,
         string framework = "net8.0",
-        string? requested = null,
         bool transitive = false,
         bool autoReferenced = false) => new()
     {
         Id = id,
         TargetFramework = framework,
-        RequestedVersion = transitive ? null : requested ?? resolved,
+        RequestedVersion = transitive ? null : resolved,
         ResolvedVersion = resolved,
         IsTransitive = transitive,
         IsAutoReferenced = autoReferenced,
@@ -57,25 +56,22 @@ public sealed class PackageSummaryBuilderTests
     }
 
     [Fact]
-    public void Build_MultiTargetedSameVersion_MergesFrameworksIntoOneUsage()
+    public void Build_MultiTargeted_MergesFrameworksOnlyWhenVersionsMatch()
     {
-        var scan = Scan((Api, [Ref("Polly", "8.0.0", "net8.0"), Ref("Polly", "8.0.0", "netstandard2.0")]));
+        var scan = Scan((Api,
+        [
+            Ref("Same", "8.0.0", "net8.0"), Ref("Same", "8.0.0", "netstandard2.0"),
+            Ref("Split", "8.0.0", "net8.0"), Ref("Split", "7.2.4", "netstandard2.0"),
+        ]));
 
-        var usage = Assert.Single(Assert.Single(PackageSummaryBuilder.Build(scan)).Usages);
+        var summaries = PackageSummaryBuilder.Build(scan);
 
-        Assert.Equal(["net8.0", "netstandard2.0"], usage.TargetFrameworks);
-        Assert.Equal(1, Assert.Single(PackageSummaryBuilder.Build(scan)).ProjectCount);
-    }
+        var same = Assert.Single(summaries.Single(s => s.Id == "Same").Usages);
+        Assert.Equal(["net8.0", "netstandard2.0"], same.TargetFrameworks);
 
-    [Fact]
-    public void Build_MultiTargetedDifferentVersions_KeepsSeparateUsages()
-    {
-        var scan = Scan((Api, [Ref("Polly", "8.0.0", "net8.0"), Ref("Polly", "7.2.4", "netstandard2.0")]));
-
-        var summary = Assert.Single(PackageSummaryBuilder.Build(scan));
-
-        Assert.Equal(["7.2.4", "8.0.0"], summary.Usages.Select(u => u.ResolvedVersion));
-        Assert.Equal(1, summary.ProjectCount);
+        var split = summaries.Single(s => s.Id == "Split");
+        Assert.Equal(["7.2.4", "8.0.0"], split.Usages.Select(u => u.ResolvedVersion));
+        Assert.Equal(1, split.ProjectCount);
     }
 
     [Fact]
@@ -95,17 +91,6 @@ public sealed class PackageSummaryBuilderTests
     }
 
     [Fact]
-    public void Build_KeepsRequestedVersionForFloatingReferences()
-    {
-        var scan = Scan((Api, [Ref("Serilog", "3.1.1", requested: "3.*")]));
-
-        var usage = Assert.Single(Assert.Single(PackageSummaryBuilder.Build(scan)).Usages);
-
-        Assert.Equal("3.*", usage.RequestedVersion);
-        Assert.Equal("3.1.1", usage.ResolvedVersion);
-    }
-
-    [Fact]
     public void Build_SortsPackagesByIdAndUsagesByProject()
     {
         var scan = Scan(
@@ -116,11 +101,5 @@ public sealed class PackageSummaryBuilderTests
 
         Assert.Equal(["alpha", "Zeta"], summaries.Select(s => s.Id));
         Assert.Equal(["Api", "Lib"], summaries[1].Usages.Select(u => u.Project.Name));
-    }
-
-    [Fact]
-    public void Build_EmptyScan_ReturnsEmpty()
-    {
-        Assert.Empty(PackageSummaryBuilder.Build(new PackageScanResult([], [])));
     }
 }

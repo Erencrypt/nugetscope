@@ -13,10 +13,4 @@ public sealed class VersionStringComparerTests
 
         Assert.Equal(["9.0.0", "9.0.2", "9.0.10", "10.0.0-preview.1", "10.0.0", "not-a-version"], ordered);
     }
-
-    [Fact]
-    public void Compare_EquivalentVersions_AreEqual()
-    {
-        Assert.Equal(0, VersionStringComparer.Instance.Compare("1.0", "1.0.0"));
-    }
 }

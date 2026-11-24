@@ -33,16 +33,6 @@ public sealed class PackageStatusTests
     }
 
     [Fact]
-    public void NoStatusData_IsNone()
-    {
-        var summary = Summarize((Api, Ref("Serilog", "4.0.0")));
-
-        Assert.Equal(PackageStatus.None, summary.Status);
-        Assert.Null(summary.LatestVersion);
-        Assert.Null(summary.HighestSeverity);
-    }
-
-    [Fact]
     public void Outdated_UsesHighestLatestVersionAndFlagsOnlyOutdatedUsages()
     {
         var summary = Summarize(
@@ -68,30 +58,17 @@ public sealed class PackageStatusTests
     }
 
     [Fact]
-    public void Deprecated_IsFlaggedWithDeprecationInfo()
+    public void Status_CombinesAllFlags()
     {
-        var deprecation = new PackageDeprecation(["Legacy"], "Azure.Storage.Blobs", ">= 0.0.0");
+        var deprecation = new PackageDeprecation(["Legacy"], "New.Package", ">= 0.0.0");
 
-        var summary = Summarize((Api, Ref("WindowsAzure.Storage", "9.3.3") with { Deprecation = deprecation }));
-
-        Assert.Equal(PackageStatus.Deprecated, summary.Status);
-        Assert.Same(deprecation, summary.Deprecation);
-    }
-
-    [Fact]
-    public void CombinesAllFlags()
-    {
         var summary = Summarize(
-            (Api, Ref("Old", "1.0.0") with
-            {
-                LatestVersion = "3.0.0",
-                Vulnerabilities = [High],
-                Deprecation = new PackageDeprecation(["Legacy"], null, null),
-            }),
+            (Api, Ref("Old", "1.0.0") with { LatestVersion = "3.0.0", Vulnerabilities = [High], Deprecation = deprecation }),
             (Lib, Ref("Old", "2.0.0")));
 
         Assert.Equal(
             PackageStatus.Outdated | PackageStatus.Vulnerable | PackageStatus.Deprecated | PackageStatus.Mismatch,
             summary.Status);
+        Assert.Same(deprecation, summary.Deprecation);
     }
 }

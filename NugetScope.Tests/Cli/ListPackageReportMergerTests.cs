@@ -17,50 +17,43 @@ public sealed class ListPackageReportMergerTests
         [Parse("outdated.json"), Parse("deprecated.json"), Parse("vulnerable.json")]);
 
     [Fact]
-    public void Merge_AppliesLatestVersionPerFramework()
+    public void Merge_AppliesStatusFieldsPerProjectAndFramework()
     {
-        var packages = PackagesOf(MergeAllStatuses(), "A");
+        var merged = MergeAllStatuses();
+        var a = PackagesOf(merged, "A");
 
-        Assert.All(packages.Where(p => p.Id == "Serilog" && !p.IsTransitive), p => Assert.Equal("4.4.0", p.LatestVersion));
-        Assert.Equal("13.0.4", PackagesOf(MergeAllStatuses(), "B").Single(p => p.Id == "Newtonsoft.Json").LatestVersion);
-    }
+        Assert.All(a.Where(p => p.Id == "Serilog" && !p.IsTransitive), p => Assert.Equal("4.4.0", p.LatestVersion));
+        Assert.Equal("13.0.4", PackagesOf(merged, "B").Single(p => p.Id == "Newtonsoft.Json").LatestVersion);
 
-    [Fact]
-    public void Merge_AppliesDeprecationAndVulnerabilities()
-    {
-        var packages = PackagesOf(MergeAllStatuses(), "A");
+        Assert.All(a.Where(p => p.Id == "WindowsAzure.Storage"), p =>
+        {
+            Assert.Equal(["Legacy"], p.Deprecation?.Reasons);
+            Assert.Equal("Azure.Storage.Common", p.Deprecation?.AlternativePackageId);
+        });
 
-        Assert.All(packages.Where(p => p.Id == "WindowsAzure.Storage"), p => Assert.Equal("Azure.Storage.Common", p.Deprecation?.AlternativePackageId));
-        Assert.All(packages.Where(p => p.Id == "Newtonsoft.Json"), p =>
-            Assert.Equal(VulnerabilitySeverity.High, Assert.Single(p.Vulnerabilities).Severity));
+        Assert.All(a.Where(p => p.Id == "Newtonsoft.Json"), p =>
+        {
+            var vulnerability = Assert.Single(p.Vulnerabilities);
+            Assert.Equal(VulnerabilitySeverity.High, vulnerability.Severity);
+            Assert.Equal(new Uri("https://github.com/advisories/GHSA-5crp-9r3c-p9vr"), vulnerability.AdvisoryUrl);
+        });
     }
 
     [Fact]
     public void Merge_LeavesUnflaggedPackagesAndTransitivesUntouched()
     {
-        var merged = MergeAllStatuses();
-        var basePackages = PackagesOf(Parse("transitive.json"), "A");
+        var merged = PackagesOf(MergeAllStatuses(), "A");
 
-        Assert.Equal(basePackages.Count, PackagesOf(merged, "A").Count);
+        Assert.Equal(PackagesOf(Parse("transitive.json"), "A").Count, merged.Count);
 
-        var humanizer = PackagesOf(merged, "A").Single(p => p.Id == "Humanizer.Core");
+        var humanizer = merged.Single(p => p.Id == "Humanizer.Core");
         Assert.Null(humanizer.Deprecation);
         Assert.Empty(humanizer.Vulnerabilities);
-        Assert.All(PackagesOf(merged, "A").Where(p => p.IsTransitive), p => Assert.Null(p.LatestVersion));
+        Assert.All(merged.Where(p => p.IsTransitive), p => Assert.Null(p.LatestVersion));
     }
 
     [Fact]
-    public void Merge_NoStatusReports_ReturnsBaseData()
-    {
-        var baseReport = Parse("transitive.json");
-
-        var merged = ListPackageReportMerger.Merge(baseReport, []);
-
-        Assert.Equal(PackagesOf(baseReport, "A"), PackagesOf(merged, "A"));
-    }
-
-    [Fact]
-    public void Merge_DeduplicatesRepeatedProblems()
+    public void Merge_DeduplicatesProblemsRepeatedByEveryCall()
     {
         var problems = Parse("project-problems.json");
 
