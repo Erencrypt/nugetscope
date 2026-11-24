@@ -4,6 +4,7 @@ using NugetScope.Core.Scanning;
 using NugetScope.Core.Solutions;
 using NugetScope.Core.Unused;
 using NugetScope.Tui.Dialogs;
+using NugetScope.Tui.Export;
 using NugetScope.Tui.Formatting;
 using NugetScope.Tui.State;
 using NugetScope.Tui.Threading;
@@ -181,6 +182,10 @@ internal sealed class MainWindow : Window
         [
             new MenuItem("_Reload", "Scan the solution again", StartLoad, Key.F5),
             new MenuItem("_Problems", "Show restore and scan problems", ShowProblems, Key.P.WithCtrl),
+            new MenuItem("_Export report...", "Save the scan results as a Markdown report", () => MarkdownExport.Run(_app, _state, _solutionPath), Key.S.WithCtrl)
+            {
+                BindKeyToApplication = true,
+            },
             new MenuItem("_Quit", "Exit nugetscope", RequestStop, Key.Q.WithCtrl),
         ]),
         new MenuBarItem("_Package",

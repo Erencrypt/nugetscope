@@ -51,4 +51,18 @@ public sealed class ReportWriterTests
         Assert.Contains("  Foo 1.0.0 (high) [A]", text);
         Assert.EndsWith("FAILED: 1 package(s) match --fail-on vulnerable." + Environment.NewLine, text);
     }
+
+    [Fact]
+    public void Markdown_report_has_tables_per_status_and_marks_unchecked_ones()
+    {
+        FailureEvaluation evaluation = FailurePolicy.Evaluate(PackageStatus.Vulnerable, [Vulnerable], Scan.Packages);
+
+        string markdown = MarkdownReportWriter.Write(Scan, [Vulnerable], unused: null, evaluation);
+
+        Assert.Contains("> **FAILED: 1 package(s) match --fail-on vulnerable.**", markdown);
+        Assert.Contains("| 1 | ? | 1 | 0 | ? |", markdown); // Deprecated and possibly unused weren't checked.
+        Assert.Contains("| `Foo` | 1.0.0 | high | [advisory](https://example.test/advisory) | A |", markdown);
+        Assert.Contains("| `Foo` | 1.0.0 | 2.0.0 | A |", markdown);
+        Assert.Contains("## Deprecated" + Environment.NewLine + Environment.NewLine + "_Not checked._", markdown);
+    }
 }

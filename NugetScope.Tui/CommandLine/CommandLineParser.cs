@@ -12,9 +12,10 @@ internal static class CommandLineParser
 
         Without options, opens the interactive dashboard. These options run without it (for CI):
           --json                Print a JSON report to stdout.
+          --markdown            Print a Markdown report to stdout (e.g. for a CI job summary).
           --fail-on <statuses>  Exit with code 2 when a package has one of these statuses:
                                 vulnerable, deprecated, outdated, mismatch (comma-separated) or any.
-                                Prints a text report unless --json is given.
+                                Prints a text report unless --json or --markdown is given.
           --transitive          Include transitive packages (slower; checks them too).
           -h, --help            Show this help.
 
@@ -39,6 +40,9 @@ internal static class CommandLineParser
                 case "--json":
                     options = options with { Json = true };
                     break;
+                case "--markdown":
+                    options = options with { Markdown = true };
+                    break;
                 case "--transitive":
                     options = options with { IncludeTransitive = true };
                     break;
@@ -58,7 +62,9 @@ internal static class CommandLineParser
             }
         }
 
-        return options;
+        return options is { Json: true, Markdown: true }
+            ? throw new ArgumentException("Use either --json or --markdown, not both.")
+            : options;
     }
 
     // Supports --fail-on=vulnerable as well as --fail-on vulnerable.

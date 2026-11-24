@@ -54,7 +54,10 @@ internal static class HeadlessRunner
         }
         else
         {
-            await Console.Out.WriteAsync(TextReportWriter.Write(scan, packages, evaluation)).ConfigureAwait(false);
+            string report = options.Markdown
+                ? MarkdownReportWriter.Write(scan, packages, unused, evaluation)
+                : TextReportWriter.Write(scan, packages, evaluation);
+            await Console.Out.WriteAsync(report).ConfigureAwait(false);
         }
 
         return evaluation switch

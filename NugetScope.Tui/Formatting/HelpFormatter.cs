@@ -13,7 +13,8 @@ internal static class HelpFormatter
         ["Ctrl+P", "Problems: restore and scan errors"],
         ["Ctrl+O", "Focus the details, or go back to the list"],
         ["Ctrl+G", "Group by project / by package"],
-        ["Ctrl+T", "Show or hide transitive packages"],        ["F3", "Next tab"],
+        ["Ctrl+T", "Show or hide transitive packages"],
+        ["Ctrl+S", "Export a Markdown report"],        ["F3", "Next tab"],
         ["F1", "This help"],
         ["Ctrl+Q", "Quit"],
     ];

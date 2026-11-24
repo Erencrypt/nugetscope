@@ -18,7 +18,8 @@ Point it at a `.sln` or `.slnx` and it shows every package used by every project
 - **Safe updates.** Pick a version, review the exact file edits, then confirm. Works with Central Package Management (`Directory.Packages.props`) and `VersionOverride`.
 - **Transitive packages.** Toggle them on to see, for example, vulnerable packages pulled in indirectly.
 - **Restore problems surfaced.** Projects that fail to restore show their errors instead of silently missing from the list.
-- **CI mode.** `--json` and `--fail-on` for pipelines.
+- **CI mode.** `--json`, `--markdown` and `--fail-on` for pipelines.
+- **Markdown export.** Save the results as a report to share, from the dashboard (`Ctrl+S`) or the command line.
 
 ## Requirements
 
@@ -61,7 +62,8 @@ The first scan runs `dotnet restore`, then lists packages and checks the feeds f
 | `Ctrl+P`           | Show restore and scan problems                   |
 | `Ctrl+O`           | Focus the details pane, or go back to the list   |
 | `Ctrl+G`           | Group by project / by package                    |
-| `Ctrl+T`           | Show or hide transitive packages                 || `F3`               | Next tab                                         |
+| `Ctrl+T`           | Show or hide transitive packages                 |
+| `Ctrl+S`           | Export a Markdown report                         |  | `F3` | Next tab |
 | `F1`               | Help: keys and what each status means            |
 | `F10`              | Open the menu                                    |
 | `Ctrl+Q`           | Quit                                             |
@@ -70,15 +72,15 @@ Navigation follows Terminal.Gui conventions: `↑`/`↓` move through the list (
 
 ### Statuses
 
-| Status          | Meaning                                                                     |
-| --------------- | --------------------------------------------------------------------------- |
-| vulnerable      | The version in use has a known security advisory                            |
-| deprecated      | The author marked the package deprecated                                    |
-| outdated        | A newer version is available                                                |
-| mismatch        | Projects use different versions of the package                              |
+| Status          | Meaning                                                                    |
+| --------------- | -------------------------------------------------------------------------- |
+| vulnerable      | The version in use has a known security advisory                           |
+| deprecated      | The author marked the package deprecated                                   |
+| outdated        | A newer version is available                                               |
+| mismatch        | Projects use different versions of the package                             |
 | possibly unused | No code in the project appears to use it (a hint, not an issue; see below) |
-| up to date      | None of the above, and every check ran                                      |
-| `?`             | A check couldn't run, so the status is unknown (`Ctrl+P` shows why)         |
+| up to date      | None of the above, and every check ran                                     |
+| `?`             | A check couldn't run, so the status is unknown (`Ctrl+P` shows why)        |
 
 ### Possibly unused packages
 
@@ -126,6 +128,7 @@ Any of these options runs nugetscope without the dashboard:
 | Option                 | Effect                                                                                                                                    |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `--json`               | Print a JSON report to stdout                                                                                                             |
+| `--markdown`           | Print a Markdown report to stdout (for example, for a job summary or a pull request comment)                                              |
 | `--fail-on <statuses>` | Exit with code 2 if any package has one of these statuses: `vulnerable`, `deprecated`, `outdated`, `mismatch` (comma-separated), or `any` |
 | `--transitive`         | Include transitive packages (slower; they are checked too)                                                                                |
 | `-h`, `--help`         | Show usage                                                                                                                                |
