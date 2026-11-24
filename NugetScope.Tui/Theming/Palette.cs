@@ -9,13 +9,14 @@ namespace NugetScope.Tui.Theming;
 /// <summary>Status colours. Only foregrounds change; backgrounds come from the active theme.</summary>
 internal static class Palette
 {
-    /// <summary>The most severe issue decides the colour: vulnerable, then deprecated, outdated, mismatch.</summary>
+    /// <summary>The most severe issue decides the colour: vulnerable, then deprecated, outdated, mismatch, possibly unused.</summary>
     public static DetailTone ToneFor(PackageStatus status, PackageChecks completedChecks) => status switch
     {
         _ when status.HasFlag(PackageStatus.Vulnerable) => DetailTone.Vulnerable,
         _ when status.HasFlag(PackageStatus.Deprecated) => DetailTone.Deprecated,
         _ when status.HasFlag(PackageStatus.Outdated) => DetailTone.Outdated,
         _ when status.HasFlag(PackageStatus.Mismatch) => DetailTone.Mismatch,
+        _ when status.HasFlag(PackageStatus.PossiblyUnused) => DetailTone.Unused,
         _ when completedChecks == PackageChecks.All => DetailTone.UpToDate,
         _ => DetailTone.Muted,
     };
@@ -25,6 +26,7 @@ internal static class Palette
         { IsVulnerable: true } => DetailTone.Vulnerable,
         { IsDeprecated: true } => DetailTone.Deprecated,
         { IsOutdated: true } => DetailTone.Outdated,
+        { IsPossiblyUnused: true } => DetailTone.Unused,
         _ => DetailTone.Normal,
     };
 
@@ -38,6 +40,7 @@ internal static class Palette
         DetailTone.Deprecated => ColorName16.BrightMagenta,
         DetailTone.Outdated or DetailTone.Warning => ColorName16.BrightYellow,
         DetailTone.Mismatch => ColorName16.BrightBlue,
+        DetailTone.Unused => ColorName16.Cyan,
         _ => null,
     };
 

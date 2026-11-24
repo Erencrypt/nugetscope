@@ -9,4 +9,5 @@ public enum PackageStatusFilter
     Outdated,
     Deprecated,
     Mismatch,
+    PossiblyUnused,
 }

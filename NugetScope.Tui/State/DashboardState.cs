@@ -2,6 +2,7 @@ using NugetScope.Core.Analysis;
 using NugetScope.Core.Packages;
 using NugetScope.Core.Scanning;
 using NugetScope.Core.Solutions;
+using NugetScope.Core.Unused;
 using NugetScope.Tui.Rows;
 
 namespace NugetScope.Tui.State;
@@ -32,11 +33,15 @@ internal sealed class DashboardState
     /// <summary>Whether the current scan listed transitive packages (it only does when asked, as it is slower).</summary>
     public bool ScanHasTransitive { get; private set; }
 
+    /// <summary>Result of the possibly-unused check for the current scan; null until it finishes.</summary>
+    public UnusedPackageReport? Unused { get; private set; }
+
     /// <param name="includesTransitive">The scan ran with transitive packages.</param>
     public void Load(SolutionScan scan, bool includesTransitive)
     {
         Scan = scan;
         ScanHasTransitive = includesTransitive;
+        Unused = null; // Belongs to the previous scan.
         CompletedChecks = scan.Packages.CompletedChecks;
         _projectScans = scan.Packages.Projects.ToDictionary(p => p.Project);
         Rebuild();
@@ -64,11 +69,22 @@ internal sealed class DashboardState
     {
         Scan = null;
         ScanHasTransitive = false;
+        Unused = null;
         Packages = [];
         Projects = [];
         CompletedChecks = PackageChecks.None;
         _projectScans = new Dictionary<ProjectInfo, ProjectPackages>();
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Applies the possibly-unused check to the current scan's packages.</summary>
+    public void SetUnused(UnusedPackageReport report)
+    {
+        Unused = report;
+        if (Scan is not null)
+        {
+            Rebuild();
+        }
     }
 
     public void ToggleGrouping()
@@ -92,7 +108,8 @@ internal sealed class DashboardState
 
     private void Rebuild()
     {
-        Packages = PackageSummaryBuilder.Build(Scan!.Packages, includeTransitive: ShowTransitive && ScanHasTransitive);
+        var packages = PackageSummaryBuilder.Build(Scan!.Packages, includeTransitive: ShowTransitive && ScanHasTransitive);
+        Packages = Unused?.Apply(packages) ?? packages;
         Projects = ProjectSummaryBuilder.Build(Packages);
         Changed?.Invoke(this, EventArgs.Empty);
     }

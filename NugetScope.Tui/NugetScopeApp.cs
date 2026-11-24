@@ -1,6 +1,7 @@
 using NugetScope.Core.Cli;
 using NugetScope.Core.Scanning;
 using NugetScope.Core.Solutions;
+using NugetScope.Core.Unused;
 using NugetScope.Core.Updates;
 using NugetScope.Tui.CommandLine;
 using NugetScope.Tui.Dialogs;
@@ -43,15 +44,16 @@ internal static class NugetScopeApp
 
         var processRunner = new ProcessRunner();
         var scanner = new SolutionScanner(new SolutionReader(), new DotnetCliPackageSource(processRunner));
+        var unusedDetector = new UnusedPackageDetector(new DotnetCliProjectContentsReader(processRunner));
 
         if (options.Headless)
         {
-            return RunHeadless(scanner, resolution, options);
+            return RunHeadless(scanner, unusedDetector, resolution, options);
         }
 
         try
         {
-            return RunDashboard(scanner, processRunner, resolution);
+            return RunDashboard(scanner, unusedDetector, processRunner, resolution);
         }
         catch (Exception ex)
         {
@@ -61,7 +63,11 @@ internal static class NugetScopeApp
         }
     }
 
-    private static int RunHeadless(SolutionScanner scanner, SolutionResolution resolution, CommandLineOptions options)
+    private static int RunHeadless(
+        SolutionScanner scanner,
+        UnusedPackageDetector unusedDetector,
+        SolutionResolution resolution,
+        CommandLineOptions options)
     {
         if (resolution is SolutionResolution.Ambiguous ambiguous)
         {
@@ -80,7 +86,7 @@ internal static class NugetScopeApp
         try
         {
             string solutionPath = ((SolutionResolution.Found)resolution).SolutionPath;
-            return HeadlessRunner.RunAsync(scanner, solutionPath, options, cancellation.Token).GetAwaiter().GetResult();
+            return HeadlessRunner.RunAsync(scanner, unusedDetector, solutionPath, options, cancellation.Token).GetAwaiter().GetResult();
         }
         catch (OperationCanceledException)
         {
@@ -89,7 +95,11 @@ internal static class NugetScopeApp
         }
     }
 
-    private static int RunDashboard(SolutionScanner scanner, IProcessRunner processRunner, SolutionResolution resolution)
+    private static int RunDashboard(
+        SolutionScanner scanner,
+        UnusedPackageDetector unusedDetector,
+        IProcessRunner processRunner,
+        SolutionResolution resolution)
     {
         using IApplication app = Application.Create();
         app.Init();
@@ -111,7 +121,7 @@ internal static class NugetScopeApp
             new DotnetCliPackageVersionSource(processRunner),
             new PackageUpdatePlanner(new DotnetCliProjectEvaluator(processRunner)));
 
-        using var window = new MainWindow(app, scanner, updateFlow, solutionPath);
+        using var window = new MainWindow(app, scanner, updateFlow, unusedDetector, solutionPath);
         app.Run(window);
 
         return ExitCodes.Success;

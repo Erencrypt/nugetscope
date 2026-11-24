@@ -3,13 +3,15 @@ using NugetScope.Core.Analysis;
 using NugetScope.Core.Packages;
 using NugetScope.Core.Reporting.Json;
 using NugetScope.Core.Scanning;
+using NugetScope.Core.Unused;
 
 namespace NugetScope.Core.Reporting;
 
 /// <summary>The machine-readable <c>--json</c> report: summary counts, every package with its usages, and all problems.</summary>
 public static class JsonReportWriter
 {
-    public static string Write(SolutionScan scan, IReadOnlyList<PackageSummary> packages)
+    /// <param name="unused">Result of the possibly-unused check, when it ran.</param>
+    public static string Write(SolutionScan scan, IReadOnlyList<PackageSummary> packages, UnusedPackageReport? unused = null)
     {
         var document = new ScanReportDocument
         {
@@ -23,6 +25,7 @@ public static class JsonReportWriter
                 Deprecated = packages.Count(p => p.Status.HasFlag(PackageStatus.Deprecated)),
                 Outdated = packages.Count(p => p.Status.HasFlag(PackageStatus.Outdated)),
                 Mismatch = packages.Count(p => p.Status.HasFlag(PackageStatus.Mismatch)),
+                PossiblyUnused = packages.Count(p => p.Status.HasFlag(PackageStatus.PossiblyUnused)),
             },
             Packages = [.. packages.Select(ToJson)],
             Projects = [.. scan.Packages.Projects.Select(p => new ReportProjectJson
@@ -30,6 +33,7 @@ public static class JsonReportWriter
                 Name = p.Project.Name,
                 Path = p.Project.FilePath,
                 SolutionFolder = p.Project.SolutionFolder,
+                UnusedCheckSkipped = unused?.Skipped.GetValueOrDefault(p.Project),
                 Problems = [.. p.Problems.Select(ToJson)],
             })],
             Problems = [.. scan.Packages.Problems.Select(ToJson)],
@@ -66,6 +70,7 @@ public static class JsonReportWriter
             Resolved = u.ResolvedVersion,
             Latest = u.LatestVersion,
             Transitive = u.IsTransitive,
+            PossiblyUnused = u.IsPossiblyUnused,
         })],
     };
 

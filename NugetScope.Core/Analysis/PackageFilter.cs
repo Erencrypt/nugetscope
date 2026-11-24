@@ -37,11 +37,12 @@ public sealed record PackageFilter(string? SearchText = null, PackageStatusFilte
     private bool MatchesStatus(PackageStatus status) => Status switch
     {
         PackageStatusFilter.All => true,
-        PackageStatusFilter.AnyIssue => status != PackageStatus.None,
+        PackageStatusFilter.AnyIssue => (status & ~PackageStatus.PossiblyUnused) != PackageStatus.None, // Only a guess.
         PackageStatusFilter.Vulnerable => status.HasFlag(PackageStatus.Vulnerable),
         PackageStatusFilter.Outdated => status.HasFlag(PackageStatus.Outdated),
         PackageStatusFilter.Deprecated => status.HasFlag(PackageStatus.Deprecated),
         PackageStatusFilter.Mismatch => status.HasFlag(PackageStatus.Mismatch),
+        PackageStatusFilter.PossiblyUnused => status.HasFlag(PackageStatus.PossiblyUnused),
         _ => true,
     };
 }

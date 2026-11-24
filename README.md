@@ -11,7 +11,8 @@ Point it at a `.sln` or `.slnx` and it shows every package used by every project
 ## Features
 
 - **Solution-wide view.** Every package across all projects, grouped by project (the default) or by package.
-- **Status tabs.** All, Any issue, Vulnerable, Outdated, Deprecated and Mismatch, each with a count and its own search.
+- **Status tabs.** All, Any issue, Vulnerable, Outdated, Deprecated, Mismatch and Possibly unused, each with a count and its own search.
+- **Possibly unused packages.** A best-effort hint for direct references that no code in the project appears to use.
 - **Details pane.** Versions per project, vulnerability severities with advisory links, deprecation reasons and suggested alternatives, and a version-mismatch table showing which projects are behind.
 - **Honest statuses.** If a check couldn't run (for example, a feed was unreachable), the status shows `?` instead of claiming "up to date".
 - **Safe updates.** Pick a version, review the exact file edits, then confirm. Works with Central Package Management (`Directory.Packages.props`) and `VersionOverride`.
@@ -60,8 +61,7 @@ The first scan runs `dotnet restore`, then lists packages and checks the feeds f
 | `Ctrl+P`           | Show restore and scan problems                   |
 | `Ctrl+O`           | Focus the details pane, or go back to the list   |
 | `Ctrl+G`           | Group by project / by package                    |
-| `Ctrl+T`           | Show or hide transitive packages                 |
-| `F3`               | Next tab                                         |
+| `Ctrl+T`           | Show or hide transitive packages                 || `F3`               | Next tab                                         |
 | `F1`               | Help: keys and what each status means            |
 | `F10`              | Open the menu                                    |
 | `Ctrl+Q`           | Quit                                             |
@@ -70,14 +70,31 @@ Navigation follows Terminal.Gui conventions: `↑`/`↓` move through the list (
 
 ### Statuses
 
-| Status     | Meaning                                                             |
-| ---------- | ------------------------------------------------------------------- |
-| vulnerable | The version in use has a known security advisory                    |
-| deprecated | The author marked the package deprecated                            |
-| outdated   | A newer version is available                                        |
-| mismatch   | Projects use different versions of the package                      |
-| up to date | None of the above, and every check ran                              |
-| `?`        | A check couldn't run, so the status is unknown (`Ctrl+P` shows why) |
+| Status          | Meaning                                                                     |
+| --------------- | --------------------------------------------------------------------------- |
+| vulnerable      | The version in use has a known security advisory                            |
+| deprecated      | The author marked the package deprecated                                    |
+| outdated        | A newer version is available                                                |
+| mismatch        | Projects use different versions of the package                              |
+| possibly unused | No code in the project appears to use it (a hint, not an issue; see below) |
+| up to date      | None of the above, and every check ran                                      |
+| `?`             | A check couldn't run, so the status is unknown (`Ctrl+P` shows why)         |
+
+### Possibly unused packages
+
+After each scan, nugetscope checks in the background whether each direct package reference is used. The dashboard stays usable meanwhile, and the title shows progress. A reference is flagged when none of the namespaces in the package's compile assemblies appear anywhere in the project:
+
+- source files (C#, F#, VB) and global usings/imports,
+- Razor and MVC views, XAML (WPF, WinUI, MAUI, Avalonia) and Web Forms pages,
+- `web.config`/`app.config` and `appsettings*.json`.
+
+It's a hint, never a verdict. Use through reflection, DI assembly scanning or configuration that names only a type or assembly, never a namespace, can't be seen this way. So it isn't counted as an issue, it can't be used with `--fail-on`, and nugetscope never removes anything. To keep false alarms down, these references are never flagged:
+
+- packages with nothing to compile against (analyzers, meta-packages, test adapters),
+- packages that hook into the build with their own props/targets,
+- development-only references (`PrivateAssets="all"`) or references that exclude compile assets.
+
+If a project can't be checked (for example, it hasn't been restored), the reason shows in its details and under `Ctrl+P`.
 
 ## Updating packages
 
@@ -145,7 +162,7 @@ The JSON report (format `version: 1`) looks like this:
   "version": 1,
   "solution": "/repo/YourSolution.slnx",
   "completedChecks": ["vulnerable", "deprecated", "outdated"],
-  "summary": { "projects": 3, "packages": 12, "vulnerable": 1, "deprecated": 0, "outdated": 4, "mismatch": 1 },
+  "summary": { "projects": 3, "packages": 12, "vulnerable": 1, "deprecated": 0, "outdated": 4, "mismatch": 1, "possiblyUnused": 2 },
   "packages": [
     {
       "id": "Some.Package",

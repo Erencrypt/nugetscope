@@ -52,5 +52,6 @@ public sealed record PackageSummary(string Id, IReadOnlyList<PackageUsage> Usage
         (Usages.Any(u => u.IsOutdated) ? PackageStatus.Outdated : PackageStatus.None)
         | (Deprecation is not null ? PackageStatus.Deprecated : PackageStatus.None)
         | (Vulnerabilities.Count > 0 ? PackageStatus.Vulnerable : PackageStatus.None)
-        | (HasVersionMismatch ? PackageStatus.Mismatch : PackageStatus.None);
+        | (HasVersionMismatch ? PackageStatus.Mismatch : PackageStatus.None)
+        | (Usages.Any(u => u.IsPossiblyUnused) ? PackageStatus.PossiblyUnused : PackageStatus.None);
 }

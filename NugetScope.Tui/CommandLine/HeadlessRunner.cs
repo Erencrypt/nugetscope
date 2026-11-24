@@ -3,6 +3,7 @@ using NugetScope.Core.Packages;
 using NugetScope.Core.Reporting;
 using NugetScope.Core.Scanning;
 using NugetScope.Core.Solutions;
+using NugetScope.Core.Unused;
 
 namespace NugetScope.Tui.CommandLine;
 
@@ -11,6 +12,7 @@ internal static class HeadlessRunner
 {
     public static async Task<int> RunAsync(
         SolutionScanner scanner,
+        UnusedPackageDetector unusedDetector,
         string solutionPath,
         CommandLineOptions options,
         CancellationToken cancellationToken)
@@ -31,14 +33,15 @@ internal static class HeadlessRunner
             return ExitCodes.Error;
         }
 
-        var packages = PackageSummaryBuilder.Build(scan.Packages, includeTransitive: options.IncludeTransitive);
+        UnusedPackageReport unused = await unusedDetector.DetectAsync(scan.Packages, cancellationToken).ConfigureAwait(false);
+        var packages = unused.Apply(PackageSummaryBuilder.Build(scan.Packages, includeTransitive: options.IncludeTransitive));
         FailureEvaluation? evaluation = options.FailOn == PackageStatus.None
             ? null
             : FailurePolicy.Evaluate(options.FailOn, packages, scan.Packages);
 
         if (options.Json)
         {
-            await Console.Out.WriteLineAsync(JsonReportWriter.Write(scan, packages)).ConfigureAwait(false);
+            await Console.Out.WriteLineAsync(JsonReportWriter.Write(scan, packages, unused)).ConfigureAwait(false);
 
             // Keep stdout pure JSON; the gate result goes to stderr.
             if (evaluation is not null)

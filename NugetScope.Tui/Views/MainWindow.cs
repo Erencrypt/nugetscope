@@ -2,6 +2,7 @@ using NugetScope.Core.Analysis;
 using NugetScope.Core.Packages;
 using NugetScope.Core.Scanning;
 using NugetScope.Core.Solutions;
+using NugetScope.Core.Unused;
 using NugetScope.Tui.Dialogs;
 using NugetScope.Tui.Formatting;
 using NugetScope.Tui.State;
@@ -21,6 +22,7 @@ internal sealed class MainWindow : Window
     private readonly SolutionScanner _scanner;
     private readonly string _solutionPath;
     private readonly PackageUpdateFlow _updateFlow;
+    private readonly UnusedPackageDetector _unusedDetector;
 
     private readonly DashboardState _state = new();
     private readonly Tabs _tabs;
@@ -33,12 +35,20 @@ internal sealed class MainWindow : Window
     private string _summaryText = "";
     private bool _isLoading;
     private bool _isUpdating;
+    private bool _checkingUnused;
+    private string? _busyText;
 
-    public MainWindow(IApplication app, SolutionScanner scanner, PackageUpdateFlow updateFlow, string solutionPath)
+    public MainWindow(
+        IApplication app,
+        SolutionScanner scanner,
+        PackageUpdateFlow updateFlow,
+        UnusedPackageDetector unusedDetector,
+        string solutionPath)
     {
         _app = app;
         _scanner = scanner;
         _updateFlow = updateFlow;
+        _unusedDetector = unusedDetector;
         _solutionPath = solutionPath;
 
         // A SpinnerView can't sit inside a border title, so the title text carries the spinner frame.
@@ -175,8 +185,7 @@ internal sealed class MainWindow : Window
         ]),
         new MenuBarItem("_Package",
         [
-            new MenuItem("_Update...", "Update the selected package, after confirming the exact changes", StartUpdate, Key.U.WithCtrl),
-        ]),
+            new MenuItem("_Update...", "Update the selected package, after confirming the exact changes", StartUpdate, Key.U.WithCtrl),        ]),
         new MenuBarItem("_View",
         [
             new MenuItem("_Search", "Search this tab", () => CurrentPage.FocusSearch(), Key.F.WithCtrl),
@@ -252,7 +261,7 @@ internal sealed class MainWindow : Window
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            OnUiThread(cancellationToken, () => ShowScan(scan, includeTransitive));
+            OnUiThread(cancellationToken, () => ShowScan(scan, includeTransitive, cancellationToken));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -277,6 +286,7 @@ internal sealed class MainWindow : Window
     private void SetLoading(ScanStage stage)
     {
         _isLoading = true;
+        _checkingUnused = false; // A check still running belongs to the previous scan and was cancelled.
         _spinner.Start();
         HeaderText = stage switch
         {
@@ -287,7 +297,7 @@ internal sealed class MainWindow : Window
         };
     }
 
-    private void ShowScan(SolutionScan scan, bool includesTransitive)
+    private void ShowScan(SolutionScan scan, bool includesTransitive, CancellationToken cancellationToken)
     {
         _isLoading = false;
         _spinner.Stop();
@@ -296,7 +306,7 @@ internal sealed class MainWindow : Window
         int packageCount = _state.Packages.Count;
         int failedProjects = scan.Packages.Projects.Count(p => p.HasErrors);
 
-        HeaderText = _summaryText = string.Join(" | ", new[]
+        _summaryText = string.Join(" | ", new[]
         {
             scan.Solution.Name,
             $"{scan.Solution.Projects.Count} projects",
@@ -310,11 +320,51 @@ internal sealed class MainWindow : Window
                 ? ProblemsFormatter.Format(scan.Packages)
                 : [new DetailLine("No package references found.")]);
         }
+
+        StartUnusedCheck(scan, cancellationToken);
+    }
+
+    // The possibly-unused check runs after the scan: the dashboard is usable meanwhile and results fill in when ready.
+    // A reload cancels it together with the scan.
+    private void StartUnusedCheck(SolutionScan scan, CancellationToken cancellationToken)
+    {
+        _checkingUnused = true;
+        RefreshHeader();
+        _ = CheckUnusedAsync(scan, cancellationToken);
+    }
+
+    private async Task CheckUnusedAsync(SolutionScan scan, CancellationToken cancellationToken)
+    {
+        UnusedPackageReport report;
+        try
+        {
+            report = await Task.Run(() => _unusedDetector.DetectAsync(scan.Packages, cancellationToken), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return; // Superseded by a newer scan.
+        }
+        catch (Exception ex)
+        {
+            // Never fail silently: every project is reported as skipped, with the reason (Ctrl+P).
+            report = new UnusedPackageReport(
+                new Dictionary<ProjectInfo, IReadOnlySet<string>>(),
+                scan.Packages.Projects.ToDictionary(p => p.Project, _ => ex.Message));
+        }
+
+        OnUiThread(cancellationToken, () =>
+        {
+            _checkingUnused = false;
+            _state.SetUnused(report);
+            RefreshHeader();
+        });
     }
 
     private void ShowError(string message)
     {
         _isLoading = false;
+        _checkingUnused = false;
         _spinner.Stop();
         _state.Clear();
         HeaderText = _summaryText = "Scan failed. Press F5 to retry.";
@@ -365,7 +415,16 @@ internal sealed class MainWindow : Window
     // Busy text with the spinner, or back to the solution summary when null.
     private void SetBusy(string? text)
     {
-        if (text is null)
+        _busyText = text;
+        RefreshHeader();
+    }
+
+    // After a scan: an update's busy text wins, then the unused check's progress, then the plain summary.
+    private void RefreshHeader()
+    {
+        string? activity = _busyText ?? (_checkingUnused ? $"{_summaryText} | checking for unused packages..." : null);
+
+        if (activity is null)
         {
             _spinner.Stop();
             HeaderText = _summaryText;
@@ -373,7 +432,7 @@ internal sealed class MainWindow : Window
         else
         {
             _spinner.Start();
-            HeaderText = text;
+            HeaderText = activity;
         }
     }
 
@@ -383,7 +442,7 @@ internal sealed class MainWindow : Window
     {
         IReadOnlyList<DetailLine> lines = _state.Scan is null
             ? [new DetailLine("No scan results yet.")]
-            : ProblemsFormatter.Format(_state.Scan.Packages);
+            : ProblemsFormatter.Format(_state.Scan.Packages, _state.Unused?.Skipped);
         LinesDialog.Show(_app, "Problems", lines);
     }
 }

@@ -9,4 +9,7 @@ public enum PackageStatus
     Deprecated = 2,
     Vulnerable = 4,
     Mismatch = 8,
+
+    /// <summary>Best-effort guess that a direct reference isn't used by its project's code. Not counted as an issue.</summary>
+    PossiblyUnused = 16,
 }

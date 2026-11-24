@@ -8,16 +8,19 @@ public static class PackageStatusNames
 {
     public const string Any = "any";
 
-    // Most severe first: the order used in reports.
-    private static readonly (PackageStatus Status, string Name, PackageChecks Check)[] Entries =
+    // Most severe first: the order used in reports. Only issues can gate a run; "possibly unused" is just a hint.
+    private static readonly (PackageStatus Status, string Name, PackageChecks Check, bool IsIssue)[] Entries =
     [
-        (PackageStatus.Vulnerable, "vulnerable", PackageChecks.Vulnerable),
-        (PackageStatus.Deprecated, "deprecated", PackageChecks.Deprecated),
-        (PackageStatus.Outdated, "outdated", PackageChecks.Outdated),
-        (PackageStatus.Mismatch, "mismatch", PackageChecks.None),
+        (PackageStatus.Vulnerable, "vulnerable", PackageChecks.Vulnerable, true),
+        (PackageStatus.Deprecated, "deprecated", PackageChecks.Deprecated, true),
+        (PackageStatus.Outdated, "outdated", PackageChecks.Outdated, true),
+        (PackageStatus.Mismatch, "mismatch", PackageChecks.None, true),
+        (PackageStatus.PossiblyUnused, "possibly-unused", PackageChecks.None, false),
     ];
 
-    public static PackageStatus AnyIssue { get; } = Entries.Aggregate(PackageStatus.None, (all, e) => all | e.Status);
+    /// <summary>Every status that counts as an issue (what <c>--fail-on any</c> means).</summary>
+    public static PackageStatus AnyIssue { get; } =
+        Entries.Where(e => e.IsIssue).Aggregate(PackageStatus.None, (all, e) => all | e.Status);
 
     /// <summary>Each single status set in <paramref name="status"/>, most severe first.</summary>
     public static IEnumerable<PackageStatus> Each(PackageStatus status) =>
@@ -46,7 +49,7 @@ public static class PackageStatusNames
                 continue;
             }
 
-            int index = Array.FindIndex(Entries, e => e.Name.Equals(part, StringComparison.OrdinalIgnoreCase));
+            int index = Array.FindIndex(Entries, e => e.IsIssue && e.Name.Equals(part, StringComparison.OrdinalIgnoreCase));
             if (index < 0)
             {
                 status = PackageStatus.None;

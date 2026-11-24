@@ -35,6 +35,11 @@ internal static class StatusFormatter
             parts.Add("mismatch");
         }
 
+        if (status.HasFlag(PackageStatus.PossiblyUnused))
+        {
+            parts.Add("possibly unused");
+        }
+
         if (parts.Count > 0)
         {
             return string.Join(", ", parts);
@@ -74,6 +79,7 @@ internal static class StatusFormatter
         PackageStatusFilter.Outdated => "Outdated",
         PackageStatusFilter.Deprecated => "Deprecated",
         PackageStatusFilter.Mismatch => "Mismatch",
+        PackageStatusFilter.PossiblyUnused => "Possibly unused",
         _ => filter.ToString(),
     };
 }

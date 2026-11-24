@@ -23,6 +23,7 @@ internal static class PackageDetailFormatter
         AppendVulnerabilities(lines, package);
         AppendMismatch(lines, package);
         AppendProjects(lines, package);
+        AppendPossiblyUnused(lines, package);
         AddUncheckedNote(lines, completedChecks);
 
         return lines;
@@ -112,6 +113,19 @@ internal static class PackageDetailFormatter
             rowIndex => ToneFor(package, package.Usages[rowIndex]));
     }
 
+    private static void AppendPossiblyUnused(List<DetailLine> lines, PackageSummary package)
+    {
+        var projects = package.Usages.Where(u => u.IsPossiblyUnused).Select(u => u.Project.Name).Distinct().ToList();
+        if (projects.Count == 0)
+        {
+            return;
+        }
+
+        lines.Add(new DetailLine(""));
+        lines.Add(new DetailLine($"Possibly unused in {string.Join(", ", projects)}: none of its namespaces appear in that code.", DetailTone.Unused));
+        lines.Add(new DetailLine("Reflection, DI assembly scanning or configuration-based loading can't be detected; check before removing.", DetailTone.Muted));
+    }
+
     private static DetailTone ToneFor(PackageSummary package, PackageUsage usage) =>
         Palette.ToneFor(usage) is DetailTone.Normal && IsBehind(package, usage) ? DetailTone.Mismatch : Palette.ToneFor(usage);
 
@@ -156,6 +170,11 @@ internal static class PackageDetailFormatter
         if (usage.IsOutdated)
         {
             notes.Add($"latest {usage.LatestVersion}");
+        }
+
+        if (usage.IsPossiblyUnused)
+        {
+            notes.Add("possibly unused");
         }
 
         return string.Join(", ", notes);

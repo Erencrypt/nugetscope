@@ -21,6 +21,9 @@ public sealed record PackageUsage(
 
     public IReadOnlyList<PackageVulnerability> Vulnerabilities { get; init; } = [];
 
+    /// <summary>Set by the unused check: no code in the project appears to use this direct reference.</summary>
+    public bool IsPossiblyUnused { get; init; }
+
     public bool IsOutdated =>
         LatestVersion is not null && VersionStringComparer.Instance.Compare(LatestVersion, ResolvedVersion) > 0;
 

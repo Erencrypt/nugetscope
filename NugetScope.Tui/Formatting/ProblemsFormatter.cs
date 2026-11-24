@@ -1,4 +1,5 @@
 using NugetScope.Core.Packages;
+using NugetScope.Core.Solutions;
 
 namespace NugetScope.Tui.Formatting;
 
@@ -8,16 +9,19 @@ internal static class ProblemsFormatter
     public static int Count(PackageScanResult scan) =>
         scan.Problems.Count + scan.Projects.Sum(p => p.Problems.Count);
 
-    public static IReadOnlyList<DetailLine> Format(PackageScanResult scan)
+    /// <param name="unusedCheckSkipped">Projects the possibly-unused check couldn't run for, listed as info.</param>
+    public static IReadOnlyList<DetailLine> Format(
+        PackageScanResult scan,
+        IReadOnlyDictionary<ProjectInfo, string>? unusedCheckSkipped = null)
     {
-        if (Count(scan) == 0)
-        {
-            return [new DetailLine("No problems.")];
-        }
-
-        return scan.Problems.Select(problem => Line("Solution", problem))
+        var lines = scan.Problems.Select(problem => Line("Solution", problem))
             .Concat(scan.Projects.SelectMany(project => project.Problems.Select(problem => Line(project.Project.Name, problem))))
+            .Concat((unusedCheckSkipped ?? new Dictionary<ProjectInfo, string>()).Select(skip => Line(
+                skip.Key.Name,
+                new PackageProblem(ProblemLevel.Info, $"possibly-unused check skipped: {skip.Value}"))))
             .ToList();
+
+        return lines.Count > 0 ? lines : [new DetailLine("No problems.")];
     }
 
     private static DetailLine Line(string scope, PackageProblem problem)

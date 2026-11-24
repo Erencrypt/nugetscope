@@ -11,6 +11,7 @@ internal enum DetailTone
     Deprecated,
     Outdated,
     Mismatch,
+    Unused,
     Error,
     Warning,
 }

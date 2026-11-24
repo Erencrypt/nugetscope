@@ -13,8 +13,7 @@ internal static class HelpFormatter
         ["Ctrl+P", "Problems: restore and scan errors"],
         ["Ctrl+O", "Focus the details, or go back to the list"],
         ["Ctrl+G", "Group by project / by package"],
-        ["Ctrl+T", "Show or hide transitive packages"],
-        ["F3", "Next tab"],
+        ["Ctrl+T", "Show or hide transitive packages"],        ["F3", "Next tab"],
         ["F1", "This help"],
         ["Ctrl+Q", "Quit"],
     ];
@@ -34,6 +33,7 @@ internal static class HelpFormatter
         ("deprecated", "The author marked the package deprecated", DetailTone.Deprecated),
         ("outdated", "A newer version is available", DetailTone.Outdated),
         ("mismatch", "Projects use different versions of the package", DetailTone.Mismatch),
+        ("possibly unused", "No code in the project seems to use it (a hint: reflection or config-based use isn't detected)", DetailTone.Unused),
         ("up to date", "None of the above, and every check ran", DetailTone.UpToDate),
         (StatusFormatter.Unknown, "A check couldn't run (Ctrl+P shows why), so the status is unknown", DetailTone.Muted),
     ];

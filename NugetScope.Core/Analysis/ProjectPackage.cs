@@ -33,5 +33,6 @@ public sealed record ProjectPackage(PackageSummary Package, IReadOnlyList<Packag
         (Usages.Any(u => u.IsOutdated) ? PackageStatus.Outdated : PackageStatus.None)
         | (Usages.Any(u => u.IsDeprecated) ? PackageStatus.Deprecated : PackageStatus.None)
         | (Usages.Any(u => u.IsVulnerable) ? PackageStatus.Vulnerable : PackageStatus.None)
-        | (Package.HasVersionMismatch ? PackageStatus.Mismatch : PackageStatus.None);
+        | (Package.HasVersionMismatch ? PackageStatus.Mismatch : PackageStatus.None)
+        | (Usages.Any(u => u.IsPossiblyUnused) ? PackageStatus.PossiblyUnused : PackageStatus.None);
 }

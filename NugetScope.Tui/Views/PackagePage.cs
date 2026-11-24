@@ -137,7 +137,11 @@ internal sealed class PackagePage : View
             case ProjectRow project:
                 // Details show the whole project, not just the packages this tab lets through.
                 ProjectSummary full = _state.FindProject(project.Project.Project) ?? project.Project;
-                _details.ShowLines(ProjectDetailFormatter.Format(full, _state.ProblemsFor(full.Project), _state.CompletedChecks));
+                _details.ShowLines(ProjectDetailFormatter.Format(
+                    full,
+                    _state.ProblemsFor(full.Project),
+                    _state.CompletedChecks,
+                    _state.Unused?.Skipped.GetValueOrDefault(full.Project)));
                 break;
             case { Package: { } package }:
                 _details.ShowLines(PackageDetailFormatter.Format(package, _state.CompletedChecks));

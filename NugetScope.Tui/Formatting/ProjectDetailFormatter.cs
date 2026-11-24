@@ -8,10 +8,12 @@ namespace NugetScope.Tui.Formatting;
 /// <summary>Coloured plain-text details for one project, for the detail pane.</summary>
 internal static class ProjectDetailFormatter
 {
+    /// <param name="unusedCheckSkipped">Why the possibly-unused check couldn't run for this project, if it couldn't.</param>
     public static IReadOnlyList<DetailLine> Format(
         ProjectSummary project,
         IReadOnlyList<PackageProblem> problems,
-        PackageChecks completedChecks)
+        PackageChecks completedChecks,
+        string? unusedCheckSkipped)
     {
         var lines = new List<DetailLine>();
         AddHeading(lines, project.Project.Name);
@@ -24,6 +26,11 @@ internal static class ProjectDetailFormatter
         if (project.Project.SolutionFolder is { } folder)
         {
             lines.Add(Field("Folder", folder));
+        }
+
+        if (unusedCheckSkipped is not null)
+        {
+            lines.Add(Field("Unused check", $"skipped: {unusedCheckSkipped}", DetailTone.Muted));
         }
 
         AppendProblems(lines, problems);

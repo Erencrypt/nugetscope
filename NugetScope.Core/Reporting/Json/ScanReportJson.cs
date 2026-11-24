@@ -33,6 +33,8 @@ internal sealed class ReportSummaryJson
     public int Outdated { get; init; }
 
     public int Mismatch { get; init; }
+
+    public int PossiblyUnused { get; init; }
 }
 
 internal sealed class ReportPackageJson
@@ -67,6 +69,8 @@ internal sealed class ReportUsageJson
     public string? Latest { get; init; }
 
     public bool Transitive { get; init; }
+
+    public bool PossiblyUnused { get; init; }
 }
 
 internal sealed class ReportDeprecationJson
@@ -92,6 +96,9 @@ internal sealed class ReportProjectJson
     public required string Path { get; init; }
 
     public string? SolutionFolder { get; init; }
+
+    /// <summary>Why the possibly-unused check couldn't run for this project; omitted when it ran.</summary>
+    public string? UnusedCheckSkipped { get; init; }
 
     public required List<ReportProblemJson> Problems { get; init; }
 }
