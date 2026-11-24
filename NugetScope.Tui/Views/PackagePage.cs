@@ -38,7 +38,7 @@ internal sealed class PackagePage : View
         _details = new DetailPane { X = Pos.Right(_panel), Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
 
         Add(_panel, _details);
-        UpdateTitle(0);
+        Refresh(); // Empty until the first scan, but titles and grouping already match the state.
 
         _state.Changed += OnStateChanged;
     }

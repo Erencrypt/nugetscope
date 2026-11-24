@@ -24,7 +24,7 @@ internal sealed class DashboardState
 
     public PackageChecks CompletedChecks { get; private set; }
 
-    public PackageGrouping Grouping { get; private set; }
+    public PackageGrouping Grouping { get; private set; } = PackageGrouping.ByProject;
 
     public void Load(SolutionScan scan)
     {

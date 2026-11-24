@@ -62,7 +62,12 @@ internal sealed class MainWindow : Window
         foreach (PackagePage page in _pages)
         {
             page.Border.Thickness = page.Border.Thickness with { Left = 0, Right = 0, Bottom = 0 };
+            IgnoreUpOnTabHeader(page);
         }
+
+        // Tabs binds Up to "previous tab". Without it, Up falls through to Terminal.Gui's app-wide Up
+        // (previous tab stop), so Up on the table's top row goes to the search field.
+        _tabs.KeyBindings.Remove(Key.CursorUp);
 
         Add(menuBar, _tabs, statusBar);
         KeepTabHeadersInSync();
@@ -104,6 +109,37 @@ internal sealed class MainWindow : Window
             ? $"nugetscope {_spinner.Frame} {_headerText}"
             : $"nugetscope - {_headerText}";
 
+
+    // A tab header binds Up itself and forwards it to Tabs ("previous tab"). Up on a header should do nothing,
+    // so consume it there. The header view is created lazily, hence the SubViewAdded hook.
+    private static void IgnoreUpOnTabHeader(View page)
+    {
+        if (page.Border.View is not BorderView border)
+        {
+            return;
+        }
+
+        if (border.TitleView is { } existing)
+        {
+            ConsumeUp(existing);
+        }
+
+        border.SubViewAdded += (_, e) =>
+        {
+            if (e.SubView is TitleView header)
+            {
+                ConsumeUp(header);
+            }
+        };
+
+        static void ConsumeUp(View header) => header.KeyDown += (_, key) =>
+        {
+            if (key == Key.CursorUp)
+            {
+                key.Handled = true;
+            }
+        };
+    }
 
     // Tabs positions its headers before the pages re-measure their titles, so after a title (count) changes the
     // headers keep the old widths until the next layout, leaving artifacts. Lay Tabs out once more when that happens.
@@ -156,12 +192,11 @@ internal sealed class MainWindow : Window
     private StatusBar CreateStatusBar() => new(
     [
         new Shortcut(Key.F5, "Reload", StartLoad),
-        new Shortcut(Key.F3, "Next tab", SelectNextTab),
         new Shortcut(Key.F.WithCtrl, "Search", () => CurrentPage.FocusSearch()),
-        new Shortcut(Key.O.WithCtrl, "Details", () => CurrentPage.ToggleDetailsFocus()),
-        new Shortcut(Key.G.WithCtrl, "Group", _state.ToggleGrouping),
         new Shortcut(Key.U.WithCtrl, "Update", StartUpdate),
         new Shortcut(Key.P.WithCtrl, "Problems", ShowProblems),
+        new Shortcut(Key.O.WithCtrl, "Details", () => CurrentPage.ToggleDetailsFocus()),
+        new Shortcut(Key.G.WithCtrl, "Group", _state.ToggleGrouping),
         new Shortcut(Key.Q.WithCtrl, "Quit", RequestStop),
     ]);
 

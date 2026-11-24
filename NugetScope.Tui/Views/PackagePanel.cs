@@ -33,8 +33,6 @@ internal sealed class PackagePanel : FrameView
 
     public PackagePanel()
     {
-        Title = StatusFormatter.Describe(PackageGrouping.ByPackage);
-
         var searchLabel = new Label { Text = "Search:", X = 0, Y = 1 };
         _search = new TextField { X = Pos.Right(searchLabel) + 1, Y = 1, Width = Dim.Fill() };
         _search.ValueChanged += (_, _) => SearchTextChanged?.Invoke(this, _search.Text);
@@ -58,6 +56,9 @@ internal sealed class PackagePanel : FrameView
             FullRowSelect = true,
         };
         _table.Style.GetOrCreateColumnStyle(StatusColumn).ColorGetter = GetStatusCellScheme;
+
+        // TableView binds Ctrl+P as an Emacs-style alias for Up, which would swallow the app's Ctrl+P Problems.
+        _table.KeyBindings.Remove(Key.P.WithCtrl);
 
         // The panel frame already surrounds the table: drop the table's own top, left and right edges.
         _table.Style.ShowHorizontalHeaderOverline = false;
