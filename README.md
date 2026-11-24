@@ -28,15 +28,24 @@ Point it at a `.sln` or `.slnx` and it shows every package used by every project
 
 ## Install
 
-nugetscope isn't on NuGet yet; packaging as a `dotnet tool` is planned. For now, build from source:
+nugetscope is a `dotnet tool`:
+
+```sh
+dotnet tool install -g nugetscope   # then run: nugetscope
+dotnet tool update -g nugetscope
+dnx nugetscope                      # or run once without installing (.NET 10 SDK)
+```
+
+To install from source instead:
 
 ```sh
 git clone https://github.com/Erencrypt/nugetscope.git
 cd nugetscope
-dotnet publish NugetScope.Tui -c Release -o out
+dotnet pack NugetScope.Tui -c Release -o out
+dotnet tool install -g nugetscope --add-source ./out
 ```
 
-The executable is `out/nugetscope` (`out\nugetscope.exe` on Windows). To run without publishing:
+To run without installing:
 
 ```sh
 dotnet run --project NugetScope.Tui -- path/to/YourSolution.slnx

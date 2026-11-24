@@ -6,7 +6,29 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Run on newer runtimes too when only those are installed. -->
+    <RollForward>Major</RollForward>
   </PropertyGroup>
+
+  <!-- dotnet tool package: dotnet tool install -g nugetscope -->
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>nugetscope</ToolCommandName>
+    <PackageId>nugetscope</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Eren</Authors>
+    <Description>Interactive terminal dashboard for the NuGet packages of a whole .NET solution (.sln/.slnx): outdated, vulnerable, deprecated, mismatched and possibly unused packages, CPM-aware updates, and a headless CI mode with JSON/Markdown reports.</Description>
+    <PackageTags>nuget;packages;dependencies;outdated;vulnerable;tui;terminal;cli;dotnet-tool</PackageTags>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Erencrypt/nugetscope</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Erencrypt/nugetscope.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Terminal.Gui" Version="2.6.0" />
