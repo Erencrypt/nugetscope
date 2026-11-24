@@ -6,7 +6,7 @@ Point it at a `.sln` or `.slnx` and it shows every package used by every project
 
 `dotnet list package` and `dotnet-outdated` print per-project text dumps. nugetscope gives you one solution-wide view that you can browse, filter and act on, and it works over SSH.
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](https://raw.githubusercontent.com/Erencrypt/nugetscope/main/docs/screenshots/dashboard.png)
 
 ## Features
 
@@ -72,7 +72,8 @@ The first scan runs `dotnet restore`, then lists packages and checks the feeds f
 | `Ctrl+O`           | Focus the details pane, or go back to the list   |
 | `Ctrl+G`           | Group by project / by package                    |
 | `Ctrl+T`           | Show or hide transitive packages                 |
-| `Ctrl+S`           | Export a Markdown report                         |  | `F3` | Next tab |
+| `Ctrl+S`           | Export a Markdown report                         |
+| `F3`               | Next tab                                         |
 | `F1`               | Help: keys and what each status means            |
 | `F10`              | Open the menu                                    |
 | `Ctrl+Q`           | Quit                                             |
@@ -120,7 +121,7 @@ Select a package and press `Enter`. In by-project grouping, a package row under 
    The confirmation dialog lists each file, the old and new version, and the affected projects.
 3. **Confirm.** Cancel is the default button, so pressing `Enter` alone never writes anything.
 
-![Update confirmation](docs/screenshots/update-confirmation.png)
+![Update confirmation](https://raw.githubusercontent.com/Erencrypt/nugetscope/main/docs/screenshots/update-confirmation.png)
 
 Only the version text is replaced. Formatting, comments, encoding (including a BOM) and line endings stay exactly as they were. If any file changed after the preview, nothing is written. After a successful update, nugetscope restores and rescans.
 
@@ -160,11 +161,13 @@ nugetscope YourSolution.slnx --fail-on vulnerable,deprecated
 nugetscope YourSolution.slnx --json --fail-on vulnerable > nugetscope-report.json
 ```
 
-Example GitHub Actions step, after building nugetscope as shown above:
+Example GitHub Actions steps (the runner needs the .NET 10 SDK):
 
 ```yaml
+- name: Install nugetscope
+  run: dotnet tool install -g nugetscope
 - name: Check NuGet packages
-  run: ./out/nugetscope YourSolution.slnx --fail-on vulnerable --transitive
+  run: nugetscope YourSolution.slnx --fail-on vulnerable --transitive
 ```
 
 The JSON report (format `version: 1`) looks like this:
@@ -199,7 +202,7 @@ nugetscope relies on the official tools rather than reimplementing NuGet:
 - package data comes from `dotnet restore` followed by `dotnet list package --format json` (base list, `--outdated`, `--deprecated`, `--vulnerable`, run in parallel),
 - update targets come from `dotnet msbuild -getItem`, and versions from `dotnet package search`.
 
-The UI is built with [Terminal.Gui](https://github.com/gui-cs/Terminal.Gui) v2.
+The UI is built with [Terminal.Gui](https://github.com/tui-cs/Terminal.Gui) v2.
 
 ## Building and testing
 
@@ -212,4 +215,4 @@ Tests use xunit.v3 on Microsoft.Testing.Platform with captured CLI output, so th
 
 ## License
 
-[GPL-3.0](LICENSE)
+[GPL-3.0](https://github.com/Erencrypt/nugetscope/blob/main/LICENSE)

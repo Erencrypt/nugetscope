@@ -24,6 +24,8 @@
     <RepositoryUrl>https://github.com/Erencrypt/nugetscope.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Deterministic package with clean Source Link paths when built by the publish workflow. -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>
