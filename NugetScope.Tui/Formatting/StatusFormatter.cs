@@ -64,21 +64,4 @@ internal static class StatusFormatter
         PackageStatusFilter.Mismatch => "Mismatch",
         _ => filter.ToString(),
     };
-
-    /// <summary>E.g. "5 outdated | 1 vulnerable"; empty when nothing is flagged.</summary>
-    public static string FormatCounts(IReadOnlyCollection<PackageSummary> packages)
-    {
-        var counts = new (PackageStatus Flag, string Label)[]
-        {
-            (PackageStatus.Vulnerable, "vulnerable"),
-            (PackageStatus.Deprecated, "deprecated"),
-            (PackageStatus.Outdated, "outdated"),
-            (PackageStatus.Mismatch, "mismatched"),
-        };
-
-        return string.Join(" | ", counts
-            .Select(c => (Count: packages.Count(p => p.Status.HasFlag(c.Flag)), c.Label))
-            .Where(c => c.Count > 0)
-            .Select(c => $"{c.Count} {c.Label}"));
-    }
 }

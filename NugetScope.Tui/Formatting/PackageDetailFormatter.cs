@@ -1,100 +1,122 @@
-using System.Text;
 using NugetScope.Core.Analysis;
 using NugetScope.Core.Packages;
+using NugetScope.Tui.Theming;
 
 namespace NugetScope.Tui.Formatting;
 
-/// <summary>Plain-text details for one package, for the detail pane.</summary>
+/// <summary>Coloured plain-text details for one package, for the detail pane.</summary>
 internal static class PackageDetailFormatter
 {
-    public static string Format(PackageSummary package, PackageChecks completedChecks)
+    private const int LabelWidth = 12;
+
+    public static IReadOnlyList<DetailLine> Format(PackageSummary package, PackageChecks completedChecks)
     {
-        var text = new StringBuilder();
+        var lines = new List<DetailLine>
+        {
+            new(package.Id, DetailTone.Heading),
+            new(new string('═', package.Id.Length), DetailTone.Heading),
+            Field("Status", StatusFormatter.FormatStatus(package, completedChecks), Palette.ToneFor(package.Status, completedChecks)),
+            Field("In use", string.Join(", ", package.ResolvedVersions), package.HasVersionMismatch ? DetailTone.Mismatch : DetailTone.Normal),
+            Field("Latest", StatusFormatter.FormatLatest(package, completedChecks)),
+        };
 
-        text.AppendLine(package.Id);
-        text.AppendLine(new string('─', package.Id.Length));
-        text.AppendLine($"Status:   {StatusFormatter.FormatStatus(package, completedChecks)}");
-        text.AppendLine($"In use:   {string.Join(", ", package.ResolvedVersions)}");
-        text.AppendLine($"Latest:   {StatusFormatter.FormatLatest(package, completedChecks)}");
+        AppendDeprecation(lines, package.Deprecation);
+        AppendVulnerabilities(lines, package);
+        AppendProjects(lines, package);
+        AppendUncheckedNote(lines, completedChecks);
 
-        AppendVulnerabilities(text, package);
-        AppendDeprecation(text, package.Deprecation);
-        AppendUsages(text, package);
-        AppendUncheckedNote(text, completedChecks);
-
-        return text.ToString();
+        return lines;
     }
 
-    private static void AppendVulnerabilities(StringBuilder text, PackageSummary package)
-    {
-        if (package.Vulnerabilities.Count == 0)
-        {
-            return;
-        }
+    private static DetailLine Field(string label, string value, DetailTone tone = DetailTone.Normal) =>
+        new(label.PadRight(LabelWidth) + value, tone);
 
-        text.AppendLine();
-        text.AppendLine("Vulnerabilities:");
-
-        foreach (PackageVulnerability vulnerability in package.Vulnerabilities)
-        {
-            var affectedVersions = package.Usages
-                .Where(u => u.Vulnerabilities.Contains(vulnerability))
-                .Select(u => u.ResolvedVersion)
-                .Distinct();
-
-            text.AppendLine($"  {vulnerability.Severity,-8} {vulnerability.AdvisoryUrl?.ToString() ?? "(no advisory link)"}");
-            text.AppendLine($"           affects {string.Join(", ", affectedVersions)}");
-        }
-    }
-
-    private static void AppendDeprecation(StringBuilder text, PackageDeprecation? deprecation)
+    private static void AppendDeprecation(List<DetailLine> lines, PackageDeprecation? deprecation)
     {
         if (deprecation is null)
         {
             return;
         }
 
-        text.AppendLine();
-        text.AppendLine($"Deprecated: {(deprecation.Reasons.Count > 0 ? string.Join(", ", deprecation.Reasons) : "no reason given")}");
+        string reasons = deprecation.Reasons.Count > 0 ? string.Join(", ", deprecation.Reasons) : "no reason given";
+        lines.Add(Field("Deprecated", reasons, DetailTone.Deprecated));
 
         if (deprecation.AlternativePackageId is not null)
         {
-            text.AppendLine($"  Alternative: {deprecation.AlternativePackageId} {deprecation.AlternativeVersionRange}".TrimEnd());
+            lines.Add(Field("Use instead", $"{deprecation.AlternativePackageId} {deprecation.AlternativeVersionRange}".TrimEnd()));
         }
     }
 
-    private static void AppendUsages(StringBuilder text, PackageSummary package)
+    private static void AppendVulnerabilities(List<DetailLine> lines, PackageSummary package)
     {
-        text.AppendLine();
-        text.AppendLine($"Projects ({package.ProjectCount}):");
-
-        int nameWidth = package.Usages.Max(u => u.Project.Name.Length);
-        int versionWidth = package.Usages.Max(u => FormatVersion(u).Length);
-
-        foreach (PackageUsage usage in package.Usages)
-        {
-            string flags = FormatUsageFlags(usage);
-
-            text.Append("  ")
-                .Append(usage.Project.Name.PadRight(nameWidth))
-                .Append("  ")
-                .Append(FormatVersion(usage).PadRight(versionWidth))
-                .Append("  ")
-                .Append(string.Join(", ", usage.TargetFrameworks))
-                .AppendLine(flags.Length > 0 ? $"  [{flags}]" : "");
-        }
-    }
-
-    private static void AppendUncheckedNote(StringBuilder text, PackageChecks completedChecks)
-    {
-        PackageChecks missing = PackageChecks.All & ~completedChecks;
-        if (missing == PackageChecks.None)
+        if (package.Vulnerabilities.Count == 0)
         {
             return;
         }
 
-        text.AppendLine();
-        text.AppendLine($"Not checked: {missing.ToString().ToLowerInvariant()} (see Ctrl+P for problems).");
+        var rows = package.Vulnerabilities
+            .Select(vulnerability => (IReadOnlyList<string>)
+            [
+                vulnerability.Severity.ToString(),
+                string.Join(", ", package.Usages
+                    .Where(u => u.Vulnerabilities.Contains(vulnerability))
+                    .Select(u => u.ResolvedVersion)
+                    .Distinct()),
+                vulnerability.AdvisoryUrl?.ToString() ?? "(no advisory link)",
+            ])
+            .ToList();
+
+        AppendTable(lines, "Vulnerabilities", ["Severity", "Affects", "Advisory"], rows, _ => DetailTone.Vulnerable);
+    }
+
+    private static void AppendProjects(List<DetailLine> lines, PackageSummary package)
+    {
+        var rows = package.Usages
+            .Select(usage => (IReadOnlyList<string>)
+            [
+                usage.Project.Name,
+                FormatVersion(usage),
+                string.Join(", ", usage.TargetFrameworks),
+                FormatNotes(usage),
+            ])
+            .ToList();
+
+        AppendTable(
+            lines,
+            $"Projects ({package.ProjectCount})",
+            ["Project", "Version", "Frameworks", "Notes"],
+            rows,
+            rowIndex => Palette.ToneFor(package.Usages[rowIndex]));
+    }
+
+    // TextTable yields the header, the rule, then one line per row, in that order.
+    private static void AppendTable(
+        List<DetailLine> lines,
+        string title,
+        IReadOnlyList<string> headers,
+        IReadOnlyList<IReadOnlyList<string>> rows,
+        Func<int, DetailTone> rowTone)
+    {
+        lines.Add(new DetailLine(""));
+        lines.Add(new DetailLine(title, DetailTone.Heading));
+
+        int index = 0;
+        foreach (string line in TextTable.Render(headers, rows))
+        {
+            DetailTone tone = index < 2 ? DetailTone.Muted : rowTone(index - 2);
+            lines.Add(new DetailLine(line, tone));
+            index++;
+        }
+    }
+
+    private static void AppendUncheckedNote(List<DetailLine> lines, PackageChecks completedChecks)
+    {
+        PackageChecks missing = PackageChecks.All & ~completedChecks;
+        if (missing != PackageChecks.None)
+        {
+            lines.Add(new DetailLine(""));
+            lines.Add(new DetailLine($"Not checked: {missing.ToString().ToLowerInvariant()} (Ctrl+P shows why).", DetailTone.Muted));
+        }
     }
 
     // Show the requested version only when it differs from what was resolved (floating versions, ranges).
@@ -102,35 +124,35 @@ internal static class PackageDetailFormatter
     {
         string resolved = usage.ResolvedVersion ?? "?";
 
-        if (usage.IsTransitive)
-        {
-            return $"{resolved} (transitive)";
-        }
-
         return usage.RequestedVersion is { } requested && !requested.Equals(resolved, StringComparison.OrdinalIgnoreCase)
             ? $"{requested} -> {resolved}"
             : resolved;
     }
 
-    private static string FormatUsageFlags(PackageUsage usage)
+    private static string FormatNotes(PackageUsage usage)
     {
-        var flags = new List<string>();
+        var notes = new List<string>();
+
+        if (usage.IsTransitive)
+        {
+            notes.Add("transitive");
+        }
 
         if (usage.IsVulnerable)
         {
-            flags.Add("vulnerable");
+            notes.Add("vulnerable");
         }
 
         if (usage.IsDeprecated)
         {
-            flags.Add("deprecated");
+            notes.Add("deprecated");
         }
 
         if (usage.IsOutdated)
         {
-            flags.Add($"latest {usage.LatestVersion}");
+            notes.Add($"latest {usage.LatestVersion}");
         }
 
-        return string.Join(", ", flags);
+        return string.Join(", ", notes);
     }
 }

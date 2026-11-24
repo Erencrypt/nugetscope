@@ -16,16 +16,13 @@ internal sealed class MainWindow : Window
     private readonly SolutionScanner _scanner;
     private readonly string _solutionPath;
 
-    private readonly SpinnerView _spinner;
-    private readonly Label _header;
-    private readonly TextField _search;
-    private readonly PackageTable _packageTable;
-    private readonly DetailPane _detailPane;
+    private readonly Tabs _tabs;
+    private readonly IReadOnlyList<PackagePage> _pages;
 
     private CancellationTokenSource? _loadCancellation;
     private SolutionScan? _scan;
-    private IReadOnlyList<PackageSummary> _allPackages = [];
-    private PackageFilter _filter = PackageFilter.None;
+    private readonly TextSpinner _spinner;
+    private string _headerText = "";
 
     public MainWindow(IApplication app, SolutionScanner scanner, string solutionPath)
     {
@@ -33,43 +30,39 @@ internal sealed class MainWindow : Window
         _scanner = scanner;
         _solutionPath = solutionPath;
 
-        Title = $"nugetscope - {Path.GetFileName(solutionPath)}";
+        // A SpinnerView can't sit inside a border title, so the title text carries the spinner frame.
+        _spinner = new TextSpinner(app);
+        _spinner.Changed += (_, _) => UpdateTitle();
 
-        MenuBar menuBar = CreateMenuBar();
+        HeaderText = Path.GetFileName(solutionPath);
+
         StatusBar statusBar = CreateStatusBar();
 
-        _spinner = new SpinnerView { X = 0, Y = Pos.Bottom(menuBar), Visible = false };
-        _header = new Label { X = 2, Y = Pos.Bottom(menuBar), Width = Dim.Fill() };
+        _pages = Enum.GetValues<PackageStatusFilter>().Select(status => new PackagePage(status)).ToList();
+        _tabs = new Tabs { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill(statusBar) };
+        _tabs.Add([.. _pages]);
 
-        var searchLabel = new Label { Text = "_Search:", X = 0, Y = Pos.Bottom(_header) };
-        _search = new TextField { X = Pos.Right(searchLabel) + 1, Y = Pos.Bottom(_header), Width = 30 };
-        _search.ValueChanged += (_, _) => UpdateFilter(_filter with { SearchText = _search.Text });
-
-        _packageTable = new PackageTable
-        {
-            X = 0,
-            Y = Pos.Bottom(_search),
-            Width = Dim.Percent(60),
-            Height = Dim.Fill(statusBar),
-        };
-        _packageTable.SelectedPackageChanged += (_, package) => ShowPackageDetails(package);
-
-        _detailPane = new DetailPane
-        {
-            X = Pos.Right(_packageTable),
-            Y = Pos.Bottom(_search),
-            Width = Dim.Fill(),
-            Height = Dim.Fill(statusBar),
-        };
-
-        Add(menuBar, _spinner, _header, searchLabel, _search, _packageTable, _detailPane, statusBar);
+        Add(_tabs, statusBar);
 
         Initialized += (_, _) =>
         {
-            _packageTable.FocusTable();
+            _tabs.Value = _pages[0];
+            _pages[0].FocusTable();
             StartLoad();
         };
     }
+
+    // Solution summary and loading status live in the window's top border title.
+    private string HeaderText
+    {
+        set
+        {
+            _headerText = value;
+            UpdateTitle();
+        }
+    }
+
+    private PackagePage CurrentPage => _tabs.Value as PackagePage ?? _pages[0];
 
     protected override void Dispose(bool disposing)
     {
@@ -77,38 +70,33 @@ internal sealed class MainWindow : Window
         {
             _loadCancellation?.Cancel();
             _loadCancellation?.Dispose();
+            _spinner.Dispose();
         }
 
         base.Dispose(disposing);
     }
 
-    private MenuBar CreateMenuBar() => new(
-    [
-        new MenuBarItem("_File",
-        [
-            new MenuItem("_Reload", "Scan the solution again", StartLoad, Key.F5),
-            new MenuItem("_Problems", "Show restore and scan problems", ShowProblems, Key.P.WithCtrl),
-            new MenuItem("_Quit", "Exit nugetscope", RequestStop, Key.Q.WithCtrl),
-        ]),
-        new MenuBarItem("F_ilter",
-        [
-            new MenuItem("_Next filter", "Cycle the status filter", CycleStatusFilter, Key.F3),
-            .. Enum.GetValues<PackageStatusFilter>().Select(status => new MenuItem(
-                StatusFormatter.Describe(status),
-                $"Show {StatusFormatter.Describe(status).ToLowerInvariant()} packages",
-                () => UpdateFilter(_filter with { Status = status }),
-                Key.Empty)),
-        ]),
-    ]);
+    private void UpdateTitle() =>
+        Title = _spinner.IsSpinning
+            ? $"nugetscope {_spinner.Frame} {_headerText}"
+            : $"nugetscope - {_headerText}";
+
 
     private StatusBar CreateStatusBar() => new(
     [
-        new Shortcut(Key.F5, "Reload", StartLoad, "Scan again"),
-        new Shortcut(Key.F3, "Filter", CycleStatusFilter, "Cycle status filter"),
-        new Shortcut(Key.F.WithCtrl, "Search", () => _search.SetFocus(), "Search by id"),
-        new Shortcut(Key.P.WithCtrl, "Problems", ShowProblems, "Restore/scan problems"),
-        new Shortcut(Key.Q.WithCtrl, "Quit", RequestStop, "Exit"),
+        new Shortcut(Key.F5, "Reload", StartLoad),
+        new Shortcut(Key.F3, "Next tab", SelectNextTab),
+        new Shortcut(Key.F.WithCtrl, "Search", () => CurrentPage.FocusSearch()),
+        new Shortcut(Key.P.WithCtrl, "Problems", ShowProblems),
+        new Shortcut(Key.Q.WithCtrl, "Quit", RequestStop),
     ]);
+
+    private void SelectNextTab()
+    {
+        int next = (_pages.ToList().IndexOf(CurrentPage) + 1) % _pages.Count;
+        _tabs.Value = _pages[next];
+        _pages[next].FocusTable();
+    }
 
     // Must be called on the UI thread. Cancels any scan still in flight.
     private void StartLoad()
@@ -157,9 +145,8 @@ internal sealed class MainWindow : Window
 
     private void SetLoading(ScanStage stage)
     {
-        _spinner.Visible = true;
-        _spinner.AutoSpin = true;
-        _header.Text = stage switch
+        _spinner.Start();
+        HeaderText = stage switch
         {
             ScanStage.ReadingSolution => "Reading solution...",
             ScanStage.Restoring => "Restoring packages...",
@@ -168,35 +155,30 @@ internal sealed class MainWindow : Window
         };
     }
 
-    private void StopLoading()
-    {
-        _spinner.AutoSpin = false;
-        _spinner.Visible = false;
-    }
-
     private void ShowScan(SolutionScan scan)
     {
-        StopLoading();
+        _spinner.Stop();
         _scan = scan;
-        _allPackages = PackageSummaryBuilder.Build(scan.Packages);
 
+        IReadOnlyList<PackageSummary> packages = PackageSummaryBuilder.Build(scan.Packages);
         int failedProjects = scan.Packages.Projects.Count(p => p.HasErrors);
-        string counts = StatusFormatter.FormatCounts(_allPackages);
 
-        _header.Text = string.Join(" | ", new[]
+        HeaderText = string.Join(" | ", new[]
         {
             scan.Solution.Name,
             $"{scan.Solution.Projects.Count} projects",
-            $"{_allPackages.Count} packages",
-            counts,
+            $"{packages.Count} packages",
             failedProjects > 0 ? $"{failedProjects} project(s) with errors (Ctrl+P)" : "",
         }.Where(part => part.Length > 0));
 
-        RefreshTable();
-
-        if (_allPackages.Count == 0)
+        foreach (PackagePage page in _pages)
         {
-            _detailPane.ShowText(ProblemsFormatter.Count(scan.Packages) > 0
+            page.SetPackages(packages, scan.Packages.CompletedChecks);
+        }
+
+        if (packages.Count == 0)
+        {
+            _pages[0].ShowMessage(ProblemsFormatter.Count(scan.Packages) > 0
                 ? ProblemsFormatter.Format(scan.Packages)
                 : "No package references found.");
         }
@@ -204,50 +186,16 @@ internal sealed class MainWindow : Window
 
     private void ShowError(string message)
     {
-        StopLoading();
+        _spinner.Stop();
         _scan = null;
-        _allPackages = [];
-        _header.Text = "Scan failed. Press F5 to retry.";
-        RefreshTable();
-        _detailPane.ShowText(message);
-    }
+        HeaderText = "Scan failed. Press F5 to retry.";
 
-    private void CycleStatusFilter()
-    {
-        var values = Enum.GetValues<PackageStatusFilter>();
-        int next = (Array.IndexOf(values, _filter.Status) + 1) % values.Length;
-        UpdateFilter(_filter with { Status = values[next] });
-    }
-
-    private void UpdateFilter(PackageFilter filter)
-    {
-        _filter = filter;
-        RefreshTable();
-    }
-
-    private void RefreshTable()
-    {
-        IReadOnlyList<PackageSummary> visible = _filter.Apply(_allPackages);
-        PackageChecks completedChecks = _scan?.Packages.CompletedChecks ?? PackageChecks.None;
-
-        string? titleSuffix = _filter.IsActive
-            ? $"{StatusFormatter.Describe(_filter.Status)}: {visible.Count} of {_allPackages.Count}"
-            : null;
-
-        _packageTable.SetPackages(visible, completedChecks, titleSuffix);
-
-        if (visible.Count == 0 && _allPackages.Count > 0)
+        foreach (PackagePage page in _pages)
         {
-            _detailPane.ShowText("No packages match the current filter.");
+            page.SetPackages([], PackageChecks.None);
         }
-    }
 
-    private void ShowPackageDetails(PackageSummary? package)
-    {
-        if (package is not null)
-        {
-            _detailPane.ShowText(PackageDetailFormatter.Format(package, _scan?.Packages.CompletedChecks ?? PackageChecks.None));
-        }
+        _pages[0].ShowMessage(message);
     }
 
     private void ShowProblems()
