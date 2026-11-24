@@ -108,6 +108,7 @@ internal sealed class PackagePage : View
             visible,
             _state.Grouping,
             _state.CompletedChecks,
+            _state.ShowTransitive && _state.ScanHasTransitive,
             string.IsNullOrWhiteSpace(_searchText) ? null : $"{visible.Count} of {inTab.Count}");
 
         if (visible.Count == 0)

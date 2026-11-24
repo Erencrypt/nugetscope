@@ -15,6 +15,9 @@ public sealed record PackageSummary(string Id, IReadOnlyList<PackageUsage> Usage
 
     public int ProjectCount { get; } = Usages.Select(u => u.Project).Distinct().Count();
 
+    /// <summary>No project references the package directly; it only comes in through other packages.</summary>
+    public bool IsTransitiveOnly => Usages.All(u => u.IsTransitive);
+
     /// <summary>Highest newer version reported by the outdated check; null when nothing is outdated or it didn't run.</summary>
     public string? LatestVersion { get; } = Usages
         .Select(u => u.LatestVersion)

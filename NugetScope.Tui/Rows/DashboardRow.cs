@@ -29,6 +29,6 @@ internal abstract class DashboardRow
     /// <summary>The package this row describes, for the detail pane; null for project rows.</summary>
     public abstract PackageSummary? Package { get; }
 
-    /// <summary>Projects an update from this row changes; empty when the row can't be updated (project rows).</summary>
+    /// <summary>Projects an update from this row changes; empty when the row can't be updated (project rows, transitive-only packages).</summary>
     public virtual IReadOnlyList<ProjectInfo> UpdateProjects => [];
 }

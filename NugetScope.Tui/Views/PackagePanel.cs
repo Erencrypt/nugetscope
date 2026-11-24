@@ -93,14 +93,16 @@ internal sealed class PackagePanel : FrameView
     public DashboardRow? SelectedRow =>
         _table.Value?.SelectedCell.Y is int row && row >= 0 && row < _source.Rows ? _source.GetObjectOnRow(row) : null;
 
+    /// <param name="showsTransitive">Transitive packages are included; shown in the frame title.</param>
     /// <param name="titleSuffix">Shown after the frame title, e.g. "5 of 12" while a search is active.</param>
     public void SetRows(
         IReadOnlyList<DashboardRow> rows,
         PackageGrouping grouping,
         PackageChecks completedChecks,
+        bool showsTransitive,
         string? titleSuffix)
     {
-        string baseTitle = StatusFormatter.Describe(grouping);
+        string baseTitle = StatusFormatter.Describe(grouping) + (showsTransitive ? " + transitive" : "");
         Title = titleSuffix is null ? baseTitle : $"{baseTitle} ({titleSuffix})";
         _completedChecks = completedChecks;
 

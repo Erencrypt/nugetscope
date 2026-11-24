@@ -181,7 +181,12 @@ internal sealed class MainWindow : Window
             new MenuItem("_Search", "Search this tab", () => CurrentPage.FocusSearch(), Key.F.WithCtrl),
             new MenuItem("_Details", "Focus the details, or go back to the list", () => CurrentPage.ToggleDetailsFocus(), Key.O.WithCtrl),
             new MenuItem("_Group", "Switch between by package and by project", _state.ToggleGrouping, Key.G.WithCtrl),
-            new MenuItem("_Next tab", "Select the next tab", SelectNextTab, Key.F3),
+            // Keys of menu-only items fire app-wide only with BindKeyToApplication (the others come from the status bar).
+            new MenuItem("_Transitive packages", "Show or hide packages that come in through other packages", ToggleTransitive, Key.T.WithCtrl)
+            {
+                BindKeyToApplication = true,
+            },
+            new MenuItem("_Next tab", "Select the next tab", SelectNextTab, Key.F3) { BindKeyToApplication = true },
             .. _pages.Select(page => new MenuItem(
                 StatusFormatter.Describe(page.Status),
                 $"Show the {StatusFormatter.Describe(page.Status)} tab",
@@ -216,11 +221,21 @@ internal sealed class MainWindow : Window
         _loadCancellation?.Dispose();
         _loadCancellation = new CancellationTokenSource();
 
-        _ = LoadAsync(_loadCancellation.Token);
+        _ = LoadAsync(_state.ShowTransitive, _loadCancellation.Token);
     }
 
-    private async Task LoadAsync(CancellationToken cancellationToken)
+    // The first time transitive packages are shown, the scan has to run again with them included.
+    private void ToggleTransitive()
     {
+        if (_state.ToggleTransitive() || (_isLoading && _state.ShowTransitive))
+        {
+            StartLoad();
+        }
+    }
+
+    private async Task LoadAsync(bool includeTransitive, CancellationToken cancellationToken)
+    {
+        var options = PackageScanOptions.Default with { IncludeTransitive = includeTransitive };
         SetLoading(ScanStage.ReadingSolution);
         var progress = new UiProgress<ScanStage>(_app, SetLoading);
 
@@ -228,11 +243,11 @@ internal sealed class MainWindow : Window
         {
             // Task.Run keeps the CLI work and JSON parsing off the UI thread entirely.
             SolutionScan scan = await Task.Run(
-                    () => _scanner.ScanAsync(_solutionPath, PackageScanOptions.Default, progress, cancellationToken),
+                    () => _scanner.ScanAsync(_solutionPath, options, progress, cancellationToken),
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            OnUiThread(cancellationToken, () => ShowScan(scan));
+            OnUiThread(cancellationToken, () => ShowScan(scan, includeTransitive));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -267,11 +282,11 @@ internal sealed class MainWindow : Window
         };
     }
 
-    private void ShowScan(SolutionScan scan)
+    private void ShowScan(SolutionScan scan, bool includesTransitive)
     {
         _isLoading = false;
         _spinner.Stop();
-        _state.Load(scan);
+        _state.Load(scan, includesTransitive);
 
         int packageCount = _state.Packages.Count;
         int failedProjects = scan.Packages.Projects.Count(p => p.HasErrors);
@@ -311,9 +326,15 @@ internal sealed class MainWindow : Window
             return;
         }
 
-        if (CurrentPage.SelectedRow is not { Package: { } package, UpdateProjects.Count: > 0 } row)
+        if (CurrentPage.SelectedRow is not { Package: { } package } row)
         {
             MessageBox.Query(_app, "Update", "Select a package to update.", "_OK");
+            return;
+        }
+
+        if (row.UpdateProjects.Count == 0)
+        {
+            MessageBox.Query(_app, "Update", $"{package.Id} is only a transitive dependency here. Add a direct reference to update it.", "_OK");
             return;
         }
 

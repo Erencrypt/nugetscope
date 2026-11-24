@@ -20,6 +20,9 @@ public sealed record ProjectPackage(PackageSummary Package, IReadOnlyList<Packag
         .OfType<string>()
         .Max(VersionStringComparer.Instance);
 
+    /// <summary>This project doesn't reference the package directly; it comes in through other packages.</summary>
+    public bool IsTransitive => Usages.All(u => u.IsTransitive);
+
     public VulnerabilitySeverity? HighestSeverity { get; } = Usages
         .SelectMany(u => u.Vulnerabilities)
         .Select(v => (VulnerabilitySeverity?)v.Severity)

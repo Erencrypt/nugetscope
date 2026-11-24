@@ -26,19 +26,44 @@ internal sealed class DashboardState
 
     public PackageGrouping Grouping { get; private set; } = PackageGrouping.ByProject;
 
-    public void Load(SolutionScan scan)
+    /// <summary>Show packages that only come in through other packages. Needs a scan with transitive data.</summary>
+    public bool ShowTransitive { get; private set; }
+
+    /// <summary>Whether the current scan listed transitive packages (it only does when asked, as it is slower).</summary>
+    public bool ScanHasTransitive { get; private set; }
+
+    /// <param name="includesTransitive">The scan ran with transitive packages.</param>
+    public void Load(SolutionScan scan, bool includesTransitive)
     {
         Scan = scan;
-        Packages = PackageSummaryBuilder.Build(scan.Packages);
-        Projects = ProjectSummaryBuilder.Build(Packages);
+        ScanHasTransitive = includesTransitive;
         CompletedChecks = scan.Packages.CompletedChecks;
         _projectScans = scan.Packages.Projects.ToDictionary(p => p.Project);
-        Changed?.Invoke(this, EventArgs.Empty);
+        Rebuild();
+    }
+
+    /// <summary>Switches transitive packages on or off. Returns true when a rescan is needed to show them.</summary>
+    public bool ToggleTransitive()
+    {
+        ShowTransitive = !ShowTransitive;
+
+        if (ShowTransitive && !ScanHasTransitive)
+        {
+            return true;
+        }
+
+        if (Scan is not null)
+        {
+            Rebuild();
+        }
+
+        return false;
     }
 
     public void Clear()
     {
         Scan = null;
+        ScanHasTransitive = false;
         Packages = [];
         Projects = [];
         CompletedChecks = PackageChecks.None;
@@ -64,4 +89,11 @@ internal sealed class DashboardState
 
     public IReadOnlyList<PackageProblem> ProblemsFor(ProjectInfo project) =>
         _projectScans.TryGetValue(project, out ProjectPackages? scan) ? scan.Problems : [];
+
+    private void Rebuild()
+    {
+        Packages = PackageSummaryBuilder.Build(Scan!.Packages, includeTransitive: ShowTransitive && ScanHasTransitive);
+        Projects = ProjectSummaryBuilder.Build(Packages);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 }
