@@ -54,6 +54,9 @@ internal sealed class PackagePage : View
     /// <summary>Shows a message instead of details (e.g. scan errors or problems).</summary>
     public void ShowMessage(string message) => _details.ShowText(message);
 
+    /// <summary>Shows coloured lines instead of details (e.g. the problems that left the scan empty).</summary>
+    public void ShowLines(IReadOnlyList<DetailLine> lines) => _details.ShowLines(lines);
+
     public void FocusSearch() => _panel.FocusSearch();
 
     public void FocusTable() => _panel.FocusTable();

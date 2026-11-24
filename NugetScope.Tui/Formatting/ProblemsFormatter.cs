@@ -1,42 +1,35 @@
-using System.Text;
 using NugetScope.Core.Packages;
 
 namespace NugetScope.Tui.Formatting;
 
-/// <summary>Plain-text list of scan problems (restore failures, missing assets, feed errors).</summary>
+/// <summary>List of scan problems (restore failures, missing assets, feed errors), errors in red and warnings in yellow.</summary>
 internal static class ProblemsFormatter
 {
     public static int Count(PackageScanResult scan) =>
         scan.Problems.Count + scan.Projects.Sum(p => p.Problems.Count);
 
-    public static string Format(PackageScanResult scan)
+    public static IReadOnlyList<DetailLine> Format(PackageScanResult scan)
     {
         if (Count(scan) == 0)
         {
-            return "No problems.";
+            return [new DetailLine("No problems.")];
         }
 
-        var text = new StringBuilder();
-
-        foreach (PackageProblem problem in scan.Problems)
-        {
-            AppendProblem(text, "Solution", problem);
-        }
-
-        foreach (ProjectPackages project in scan.Projects.Where(p => p.Problems.Count > 0))
-        {
-            foreach (PackageProblem problem in project.Problems)
-            {
-                AppendProblem(text, project.Project.Name, problem);
-            }
-        }
-
-        return text.ToString().TrimEnd();
+        return scan.Problems.Select(problem => Line("Solution", problem))
+            .Concat(scan.Projects.SelectMany(project => project.Problems.Select(problem => Line(project.Project.Name, problem))))
+            .ToList();
     }
 
-    private static void AppendProblem(StringBuilder text, string scope, PackageProblem problem)
+    private static DetailLine Line(string scope, PackageProblem problem)
     {
         string code = problem.Code is null ? "" : $" {problem.Code}";
-        text.AppendLine($"[{problem.Level}{code}] {scope}: {problem.Message}");
+        DetailTone tone = problem.Level switch
+        {
+            ProblemLevel.Error => DetailTone.Error,
+            ProblemLevel.Warning => DetailTone.Warning,
+            _ => DetailTone.Normal,
+        };
+
+        return new DetailLine($"[{problem.Level}{code}] {scope}: {problem.Message}", tone);
     }
 }

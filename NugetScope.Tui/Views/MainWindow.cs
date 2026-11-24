@@ -2,6 +2,7 @@ using NugetScope.Core.Analysis;
 using NugetScope.Core.Packages;
 using NugetScope.Core.Scanning;
 using NugetScope.Core.Solutions;
+using NugetScope.Tui.Dialogs;
 using NugetScope.Tui.Formatting;
 using NugetScope.Tui.State;
 using NugetScope.Tui.Threading;
@@ -182,7 +183,7 @@ internal sealed class MainWindow : Window
             new MenuItem("_Details", "Focus the details, or go back to the list", () => CurrentPage.ToggleDetailsFocus(), Key.O.WithCtrl),
             new MenuItem("_Group", "Switch between by package and by project", _state.ToggleGrouping, Key.G.WithCtrl),
             // Keys of menu-only items fire app-wide only with BindKeyToApplication (the others come from the status bar).
-            new MenuItem("_Transitive packages", "Show or hide packages that come in through other packages", ToggleTransitive, Key.T.WithCtrl)
+            new MenuItem("_Transitive packages", "Show or hide transitive packages", ToggleTransitive, Key.T.WithCtrl)
             {
                 BindKeyToApplication = true,
             },
@@ -192,6 +193,10 @@ internal sealed class MainWindow : Window
                 $"Show the {StatusFormatter.Describe(page.Status)} tab",
                 () => SelectPage(page),
                 Key.Empty)),
+        ]),
+        new MenuBarItem("_Help",
+        [
+            new MenuItem("_Keys and statuses", "Keys, navigation and what each status means", ShowHelp, Key.F1) { BindKeyToApplication = true },
         ]),
     ]);
 
@@ -301,9 +306,9 @@ internal sealed class MainWindow : Window
 
         if (packageCount == 0)
         {
-            _pages[0].ShowMessage(ProblemsFormatter.Count(scan.Packages) > 0
+            _pages[0].ShowLines(ProblemsFormatter.Count(scan.Packages) > 0
                 ? ProblemsFormatter.Format(scan.Packages)
-                : "No package references found.");
+                : [new DetailLine("No package references found.")]);
         }
     }
 
@@ -372,9 +377,13 @@ internal sealed class MainWindow : Window
         }
     }
 
+    private void ShowHelp() => LinesDialog.Show(_app, "Help", HelpFormatter.Format());
+
     private void ShowProblems()
     {
-        string text = _state.Scan is null ? "No scan results yet." : ProblemsFormatter.Format(_state.Scan.Packages);
-        MessageBox.Query(_app, "Problems", text, "_OK");
+        IReadOnlyList<DetailLine> lines = _state.Scan is null
+            ? [new DetailLine("No scan results yet.")]
+            : ProblemsFormatter.Format(_state.Scan.Packages);
+        LinesDialog.Show(_app, "Problems", lines);
     }
 }
