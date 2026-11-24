@@ -31,7 +31,7 @@ public sealed class DotnetCliPackageSourceTests
     {
         var runner = RunnerWithCapturedOutput();
 
-        await new DotnetCliPackageSource(runner).ScanAsync(Solution, new PackageScanOptions(IncludeTransitive: true));
+        await new DotnetCliPackageSource(runner).ScanAsync(Solution, new PackageScanOptions(IncludeTransitive: true), TestContext.Current.CancellationToken);
 
         Assert.Equal(["restore", "list"], runner.Calls.Select(c => c[0]));
         var list = runner.Calls[1];
@@ -47,7 +47,7 @@ public sealed class DotnetCliPackageSourceTests
     {
         var runner = RunnerWithCapturedOutput();
 
-        await new DotnetCliPackageSource(runner).ScanAsync(Solution, new PackageScanOptions(Restore: false));
+        await new DotnetCliPackageSource(runner).ScanAsync(Solution, new PackageScanOptions(Restore: false), TestContext.Current.CancellationToken);
 
         var call = Assert.Single(runner.Calls);
         Assert.Equal("list", call[0]);
@@ -57,7 +57,7 @@ public sealed class DotnetCliPackageSourceTests
     [Fact]
     public async Task ScanAsync_ReturnsOneEntryPerSolutionProjectInOrder()
     {
-        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default);
+        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
 
         Assert.Equal(["A", "B", "C", "D"], result.Projects.Select(p => p.Project.Name));
         Assert.Same(Solution.Projects[0], result.Projects[0].Project);
@@ -66,7 +66,7 @@ public sealed class DotnetCliPackageSourceTests
     [Fact]
     public async Task ScanAsync_HealthyProject_HasPackagesAndNoErrors()
     {
-        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default);
+        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
 
         var a = result.Projects[0];
         Assert.False(a.HasErrors);
@@ -78,7 +78,7 @@ public sealed class DotnetCliPackageSourceTests
     [Fact]
     public async Task ScanAsync_AttachesListProblemsAndRestoreErrorsToProjects()
     {
-        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default);
+        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
 
         var b = result.Projects[1];
         Assert.True(b.HasErrors);
@@ -94,7 +94,7 @@ public sealed class DotnetCliPackageSourceTests
     [Fact]
     public async Task ScanAsync_ProjectMissingFromOutput_GetsWarning()
     {
-        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default);
+        var result = await new DotnetCliPackageSource(RunnerWithCapturedOutput()).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
 
         var d = result.Projects[3];
         Assert.Empty(d.Packages);
@@ -108,7 +108,7 @@ public sealed class DotnetCliPackageSourceTests
             .On("restore", Ok("error NU1301: Unable to load the service index for source https://example.invalid/v3/index.json."))
             .On("list", Ok(FixtureFile.Read("DotnetList/transitive.json")));
 
-        var result = await new DotnetCliPackageSource(runner).ScanAsync(Solution, PackageScanOptions.Default);
+        var result = await new DotnetCliPackageSource(runner).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken);
 
         Assert.Equal("NU1301", Assert.Single(result.Problems).Code);
     }
@@ -121,7 +121,7 @@ public sealed class DotnetCliPackageSourceTests
             .On("list", new ProcessResult(1, "", "MSBUILD : error MSB1009: Project file does not exist."));
 
         var ex = await Assert.ThrowsAsync<PackageSourceException>(
-            () => new DotnetCliPackageSource(runner).ScanAsync(Solution, PackageScanOptions.Default));
+            () => new DotnetCliPackageSource(runner).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken));
 
         Assert.Contains("MSB1009", ex.Message);
     }
@@ -132,7 +132,7 @@ public sealed class DotnetCliPackageSourceTests
         var runner = new FakeProcessRunner().On("restore", () => throw new Win32Exception(2, "File not found"));
 
         var ex = await Assert.ThrowsAsync<PackageSourceException>(
-            () => new DotnetCliPackageSource(runner).ScanAsync(Solution, PackageScanOptions.Default));
+            () => new DotnetCliPackageSource(runner).ScanAsync(Solution, PackageScanOptions.Default, TestContext.Current.CancellationToken));
 
         Assert.IsType<Win32Exception>(ex.InnerException);
     }
