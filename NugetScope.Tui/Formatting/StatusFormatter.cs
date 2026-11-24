@@ -8,14 +8,16 @@ internal static class StatusFormatter
 {
     public const string Unknown = "?";
 
-    public static string FormatStatus(PackageSummary package, PackageChecks completedChecks)
+    public static string FormatStatus(PackageSummary package, PackageChecks completedChecks) =>
+        FormatStatus(package.Status, package.HighestSeverity, completedChecks);
+
+    public static string FormatStatus(PackageStatus status, VulnerabilitySeverity? highestSeverity, PackageChecks completedChecks)
     {
         var parts = new List<string>();
-        PackageStatus status = package.Status;
 
         if (status.HasFlag(PackageStatus.Vulnerable))
         {
-            parts.Add($"vulnerable ({package.HighestSeverity?.ToString().ToLowerInvariant()})");
+            parts.Add($"vulnerable ({highestSeverity?.ToString().ToLowerInvariant()})");
         }
 
         if (status.HasFlag(PackageStatus.Deprecated))
@@ -41,18 +43,28 @@ internal static class StatusFormatter
         return completedChecks == PackageChecks.All ? "up to date" : Unknown;
     }
 
-    public static string FormatLatest(PackageSummary package, PackageChecks completedChecks)
+    public static string FormatLatest(PackageSummary package, PackageChecks completedChecks) =>
+        FormatLatest(package.LatestVersion, package.ResolvedVersions, completedChecks);
+
+    /// <param name="resolvedVersions">Versions in use, lowest first.</param>
+    public static string FormatLatest(string? latestVersion, IReadOnlyList<string> resolvedVersions, PackageChecks completedChecks)
     {
-        if (package.LatestVersion is not null)
+        if (latestVersion is not null)
         {
-            return package.LatestVersion;
+            return latestVersion;
         }
 
         // Nothing reported as outdated: the highest version in use is the latest, if the check actually ran.
-        return completedChecks.HasFlag(PackageChecks.Outdated) && package.ResolvedVersions.Count > 0
-            ? package.ResolvedVersions[^1]
+        return completedChecks.HasFlag(PackageChecks.Outdated) && resolvedVersions.Count > 0
+            ? resolvedVersions[^1]
             : Unknown;
     }
+
+    public static string Describe(PackageGrouping grouping) => grouping switch
+    {
+        PackageGrouping.ByProject => "Projects",
+        _ => "Packages",
+    };
 
     public static string Describe(PackageStatusFilter filter) => filter switch
     {

@@ -2,6 +2,7 @@ using NugetScope.Core.Analysis;
 using NugetScope.Core.Packages;
 using NugetScope.Core.Scanning;
 using NugetScope.Tui.Formatting;
+using NugetScope.Tui.State;
 using NugetScope.Tui.Threading;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
@@ -16,11 +17,11 @@ internal sealed class MainWindow : Window
     private readonly SolutionScanner _scanner;
     private readonly string _solutionPath;
 
+    private readonly DashboardState _state = new();
     private readonly Tabs _tabs;
     private readonly IReadOnlyList<PackagePage> _pages;
 
     private CancellationTokenSource? _loadCancellation;
-    private SolutionScan? _scan;
     private readonly TextSpinner _spinner;
     private string _headerText = "";
 
@@ -36,13 +37,15 @@ internal sealed class MainWindow : Window
 
         HeaderText = Path.GetFileName(solutionPath);
 
+        _pages = Enum.GetValues<PackageStatusFilter>().Select(status => new PackagePage(_state, status)).ToList();
+
+        MenuBar menuBar = CreateMenuBar();
         StatusBar statusBar = CreateStatusBar();
 
-        _pages = Enum.GetValues<PackageStatusFilter>().Select(status => new PackagePage(status)).ToList();
-        _tabs = new Tabs { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill(statusBar) };
+        _tabs = new Tabs { X = 0, Y = Pos.Bottom(menuBar), Width = Dim.Fill(), Height = Dim.Fill(statusBar) };
         _tabs.Add([.. _pages]);
 
-        Add(_tabs, statusBar);
+        Add(menuBar, _tabs, statusBar);
 
         Initialized += (_, _) =>
         {
@@ -82,20 +85,43 @@ internal sealed class MainWindow : Window
             : $"nugetscope - {_headerText}";
 
 
+    private MenuBar CreateMenuBar() => new(
+    [
+        new MenuBarItem("_File",
+        [
+            new MenuItem("_Reload", "Scan the solution again", StartLoad, Key.F5),
+            new MenuItem("_Problems", "Show restore and scan problems", ShowProblems, Key.P.WithCtrl),
+            new MenuItem("_Quit", "Exit nugetscope", RequestStop, Key.Q.WithCtrl),
+        ]),
+        new MenuBarItem("_View",
+        [
+            new MenuItem("_Search", "Search this tab", () => CurrentPage.FocusSearch(), Key.F.WithCtrl),
+            new MenuItem("_Group", "Switch between by package and by project", _state.ToggleGrouping, Key.G.WithCtrl),
+            new MenuItem("_Next tab", "Select the next tab", SelectNextTab, Key.F3),
+            .. _pages.Select(page => new MenuItem(
+                StatusFormatter.Describe(page.Status),
+                $"Show the {StatusFormatter.Describe(page.Status)} tab",
+                () => SelectPage(page),
+                Key.Empty)),
+        ]),
+    ]);
+
     private StatusBar CreateStatusBar() => new(
     [
         new Shortcut(Key.F5, "Reload", StartLoad),
         new Shortcut(Key.F3, "Next tab", SelectNextTab),
         new Shortcut(Key.F.WithCtrl, "Search", () => CurrentPage.FocusSearch()),
+        new Shortcut(Key.G.WithCtrl, "Group", _state.ToggleGrouping),
         new Shortcut(Key.P.WithCtrl, "Problems", ShowProblems),
         new Shortcut(Key.Q.WithCtrl, "Quit", RequestStop),
     ]);
 
-    private void SelectNextTab()
+    private void SelectNextTab() => SelectPage(_pages[(_pages.ToList().IndexOf(CurrentPage) + 1) % _pages.Count]);
+
+    private void SelectPage(PackagePage page)
     {
-        int next = (_pages.ToList().IndexOf(CurrentPage) + 1) % _pages.Count;
-        _tabs.Value = _pages[next];
-        _pages[next].FocusTable();
+        _tabs.Value = page;
+        page.FocusTable();
     }
 
     // Must be called on the UI thread. Cancels any scan still in flight.
@@ -158,25 +184,20 @@ internal sealed class MainWindow : Window
     private void ShowScan(SolutionScan scan)
     {
         _spinner.Stop();
-        _scan = scan;
+        _state.Load(scan);
 
-        IReadOnlyList<PackageSummary> packages = PackageSummaryBuilder.Build(scan.Packages);
+        int packageCount = _state.Packages.Count;
         int failedProjects = scan.Packages.Projects.Count(p => p.HasErrors);
 
         HeaderText = string.Join(" | ", new[]
         {
             scan.Solution.Name,
             $"{scan.Solution.Projects.Count} projects",
-            $"{packages.Count} packages",
+            $"{packageCount} packages",
             failedProjects > 0 ? $"{failedProjects} project(s) with errors (Ctrl+P)" : "",
         }.Where(part => part.Length > 0));
 
-        foreach (PackagePage page in _pages)
-        {
-            page.SetPackages(packages, scan.Packages.CompletedChecks);
-        }
-
-        if (packages.Count == 0)
+        if (packageCount == 0)
         {
             _pages[0].ShowMessage(ProblemsFormatter.Count(scan.Packages) > 0
                 ? ProblemsFormatter.Format(scan.Packages)
@@ -187,20 +208,15 @@ internal sealed class MainWindow : Window
     private void ShowError(string message)
     {
         _spinner.Stop();
-        _scan = null;
+        _state.Clear();
         HeaderText = "Scan failed. Press F5 to retry.";
-
-        foreach (PackagePage page in _pages)
-        {
-            page.SetPackages([], PackageChecks.None);
-        }
 
         _pages[0].ShowMessage(message);
     }
 
     private void ShowProblems()
     {
-        string text = _scan is null ? "No scan results yet." : ProblemsFormatter.Format(_scan.Packages);
+        string text = _state.Scan is null ? "No scan results yet." : ProblemsFormatter.Format(_state.Scan.Packages);
         MessageBox.Query(_app, "Problems", text, "_OK");
     }
 }

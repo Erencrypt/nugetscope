@@ -53,6 +53,9 @@ public sealed class PackageSummaryBuilderTests
 
         Assert.Equal(["9.1.0", "10.0.0"], summary.ResolvedVersions);
         Assert.True(summary.HasVersionMismatch);
+        Assert.Equal(
+            [("10.0.0", "Api"), ("9.1.0", "Lib")],
+            summary.VersionGroups.Select(g => (g.Version, Assert.Single(g.Projects).Name)));
     }
 
     [Fact]

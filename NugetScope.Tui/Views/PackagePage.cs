@@ -1,25 +1,26 @@
 using NugetScope.Core.Analysis;
-using NugetScope.Core.Packages;
 using NugetScope.Tui.Formatting;
+using NugetScope.Tui.Rows;
+using NugetScope.Tui.State;
 using Terminal.Gui.ViewBase;
 
 namespace NugetScope.Tui.Views;
 
 /// <summary>
-/// One tab: packages matching a status filter, with its own search, table and detail pane.
+/// One tab: rows matching a status filter, with its own search, table and detail pane.
 /// Keeping the detail pane inside the page lets Tab move header → search → table → details natively.
 /// </summary>
 internal sealed class PackagePage : View
 {
+    private readonly DashboardState _state;
     private readonly PackagePanel _panel;
     private readonly DetailPane _details;
 
-    private IReadOnlyList<PackageSummary> _allPackages = [];
-    private PackageChecks _completedChecks;
     private string _searchText = "";
 
-    public PackagePage(PackageStatusFilter status)
+    public PackagePage(DashboardState state, PackageStatusFilter status)
     {
+        _state = state;
         Status = status;
         Width = Dim.Fill();
         Height = Dim.Fill();
@@ -31,31 +32,35 @@ internal sealed class PackagePage : View
             _searchText = text;
             Refresh();
         };
-        _panel.SelectedPackageChanged += (_, package) => ShowDetails(package);
+        _panel.SelectedRowChanged += (_, row) => ShowDetails(row);
         _panel.UpFromSearch += (_, _) => FocusOwnTabHeader();
 
         _details = new DetailPane { X = Pos.Right(_panel), Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
 
         Add(_panel, _details);
         UpdateTitle(0);
+
+        _state.Changed += OnStateChanged;
     }
 
     public PackageStatusFilter Status { get; }
 
-    /// <summary>Replaces the data shown on this page; keeps the page's search text.</summary>
-    public void SetPackages(IReadOnlyList<PackageSummary> packages, PackageChecks completedChecks)
-    {
-        _allPackages = packages;
-        _completedChecks = completedChecks;
-        Refresh();
-    }
-
-    /// <summary>Shows a message instead of package details (e.g. scan errors or problems).</summary>
+    /// <summary>Shows a message instead of details (e.g. scan errors or problems).</summary>
     public void ShowMessage(string message) => _details.ShowText(message);
 
     public void FocusSearch() => _panel.FocusSearch();
 
     public void FocusTable() => _panel.FocusTable();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _state.Changed -= OnStateChanged;
+        }
+
+        base.Dispose(disposing);
+    }
 
     // Tabs makes the page itself a focus stop (e.g. Down from the tab header). Nothing on the page is usable
     // at that level, so hand focus to the search field. No stock TabStop setting avoids this stop (verified).
@@ -69,18 +74,26 @@ internal sealed class PackagePage : View
         }
     }
 
+    private void OnStateChanged(object? sender, EventArgs e) => Refresh();
+
     private void Refresh()
     {
         var statusFilter = new PackageFilter(Status: Status);
-        IReadOnlyList<PackageSummary> inTab = statusFilter.Apply(_allPackages);
-        IReadOnlyList<PackageSummary> visible = (statusFilter with { SearchText = _searchText }).Apply(inTab);
+        IReadOnlyList<DashboardRow> inTab = _state.RowsFor(statusFilter);
+        IReadOnlyList<DashboardRow> visible = string.IsNullOrWhiteSpace(_searchText)
+            ? inTab
+            : _state.RowsFor(statusFilter with { SearchText = _searchText });
 
         UpdateTitle(inTab.Count);
-        _panel.SetPackages(visible, _completedChecks, string.IsNullOrWhiteSpace(_searchText) ? null : $"{visible.Count} of {inTab.Count}");
+        _panel.SetRows(
+            visible,
+            _state.Grouping,
+            _state.CompletedChecks,
+            string.IsNullOrWhiteSpace(_searchText) ? null : $"{visible.Count} of {inTab.Count}");
 
         if (visible.Count == 0)
         {
-            _details.ShowText(_allPackages.Count == 0 ? "" : "No packages match this tab and search.");
+            _details.ShowText(_state.Packages.Count == 0 ? "" : "Nothing matches this tab and search.");
         }
     }
 
@@ -89,11 +102,18 @@ internal sealed class PackagePage : View
 
     private void UpdateTitle(int count) => Title = $"{StatusFormatter.Describe(Status)} {count}";
 
-    private void ShowDetails(PackageSummary? package)
+    private void ShowDetails(DashboardRow? row)
     {
-        if (package is not null)
+        switch (row)
         {
-            _details.ShowLines(PackageDetailFormatter.Format(package, _completedChecks));
+            case ProjectRow project:
+                // Details show the whole project, not just the packages this tab lets through.
+                ProjectSummary full = _state.FindProject(project.Project.Project) ?? project.Project;
+                _details.ShowLines(ProjectDetailFormatter.Format(full, _state.ProblemsFor(full.Project), _state.CompletedChecks));
+                break;
+            case { Package: { } package }:
+                _details.ShowLines(PackageDetailFormatter.Format(package, _state.CompletedChecks));
+                break;
         }
     }
 }

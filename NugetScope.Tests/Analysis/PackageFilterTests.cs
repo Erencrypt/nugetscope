@@ -47,6 +47,27 @@ public sealed class PackageFilterTests
     }
 
     [Fact]
+    public void Apply_Projects_FiltersPackagesByOwnStatus_AndDropsEmptyProjects()
+    {
+        var projects = ProjectSummaryBuilder.Build(All);
+
+        var result = new PackageFilter(Status: PackageStatusFilter.Mismatch).Apply(projects);
+
+        Assert.Equal(["Api", "Lib"], result.Select(p => p.Project.Name));
+        Assert.All(result, p => Assert.Equal(["Humanizer"], p.Packages.Select(x => x.Package.Id)));
+        Assert.DoesNotContain(new PackageFilter(Status: PackageStatusFilter.Vulnerable).Apply(projects), p => p.Project == Lib);
+    }
+
+    [Fact]
+    public void Apply_Projects_SearchMatchesProjectNameOrPackageId()
+    {
+        var projects = ProjectSummaryBuilder.Build(All);
+
+        Assert.Equal(["Humanizer"], new PackageFilter("lib").Apply(projects).Single().Packages.Select(p => p.Package.Id));
+        Assert.Equal(["Api"], new PackageFilter("polly").Apply(projects).Select(p => p.Project.Name));
+    }
+
+    [Fact]
     public void IsActive_OnlyWhenSearchOrStatusSet()
     {
         Assert.False(PackageFilter.None.IsActive);

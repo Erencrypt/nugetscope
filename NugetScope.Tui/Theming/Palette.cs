@@ -34,9 +34,9 @@ internal static class Palette
         DetailTone.Heading => ColorName16.BrightCyan,
         DetailTone.Muted => ColorName16.DarkGray,
         DetailTone.UpToDate => ColorName16.BrightGreen,
-        DetailTone.Vulnerable => ColorName16.BrightRed,
+        DetailTone.Vulnerable or DetailTone.Error => ColorName16.BrightRed,
         DetailTone.Deprecated => ColorName16.BrightMagenta,
-        DetailTone.Outdated => ColorName16.BrightYellow,
+        DetailTone.Outdated or DetailTone.Warning => ColorName16.BrightYellow,
         DetailTone.Mismatch => ColorName16.BrightBlue,
         _ => null,
     };

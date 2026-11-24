@@ -9,11 +9,30 @@ public sealed record PackageFilter(string? SearchText = null, PackageStatusFilte
 
     public IReadOnlyList<PackageSummary> Apply(IEnumerable<PackageSummary> packages) => packages.Where(Matches).ToList();
 
-    public bool Matches(PackageSummary package) => MatchesText(package) && MatchesStatus(package.Status);
+    /// <summary>
+    /// Keeps each project's packages whose own status matches and whose id (or the project's name) matches the search.
+    /// Projects left without packages are dropped.
+    /// </summary>
+    public IReadOnlyList<ProjectSummary> Apply(IEnumerable<ProjectSummary> projects) => projects
+        .Select(project =>
+        {
+            bool projectNameMatches = MatchesText(project.Project.Name);
 
-    private bool MatchesText(PackageSummary package) =>
+            return project with
+            {
+                Packages = project.Packages
+                    .Where(p => MatchesStatus(p.Status) && (projectNameMatches || MatchesText(p.Package.Id)))
+                    .ToList(),
+            };
+        })
+        .Where(project => project.Packages.Count > 0)
+        .ToList();
+
+    public bool Matches(PackageSummary package) => MatchesText(package.Id) && MatchesStatus(package.Status);
+
+    private bool MatchesText(string text) =>
         string.IsNullOrWhiteSpace(SearchText)
-        || package.Id.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase);
+        || text.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private bool MatchesStatus(PackageStatus status) => Status switch
     {

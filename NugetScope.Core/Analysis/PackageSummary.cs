@@ -37,6 +37,14 @@ public sealed record PackageSummary(string Id, IReadOnlyList<PackageUsage> Usage
     /// <summary>More than one resolved version is in use across the solution.</summary>
     public bool HasVersionMismatch => ResolvedVersions.Count > 1;
 
+    /// <summary>Projects per resolved version, highest version first; the basis of the mismatch view.</summary>
+    public IReadOnlyList<PackageVersionGroup> VersionGroups => Usages
+        .Where(u => u.ResolvedVersion is not null)
+        .GroupBy(u => u.ResolvedVersion!, StringComparer.OrdinalIgnoreCase)
+        .OrderByDescending(g => g.Key, VersionStringComparer.Instance)
+        .Select(g => new PackageVersionGroup(g.Key, g.Select(u => u.Project).Distinct().ToList()))
+        .ToList();
+
     public PackageStatus Status =>
         (Usages.Any(u => u.IsOutdated) ? PackageStatus.Outdated : PackageStatus.None)
         | (Deprecation is not null ? PackageStatus.Deprecated : PackageStatus.None)
