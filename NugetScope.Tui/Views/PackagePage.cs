@@ -52,6 +52,19 @@ internal sealed class PackagePage : View
 
     public void FocusTable() => _panel.FocusTable();
 
+    /// <summary>Moves focus into the details (to scroll long text), or back to the table when already there.</summary>
+    public void ToggleDetailsFocus()
+    {
+        if (_details.HasFocus)
+        {
+            _panel.FocusTable();
+        }
+        else
+        {
+            _details.FocusList();
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -100,7 +113,12 @@ internal sealed class PackagePage : View
     // Tabs draws each page's header in the page's border; focusing it keeps this tab selected.
     private void FocusOwnTabHeader() => (Border.View as BorderView)?.TitleView?.SetFocus();
 
-    private void UpdateTitle(int count) => Title = $"{StatusFormatter.Describe(Status)} {count}";
+    // Tabs sizes the header from the title during layout; a new title alone isn't re-measured until the next layout.
+    private void UpdateTitle(int count)
+    {
+        Title = $"{StatusFormatter.Describe(Status)} {count}";
+        SetNeedsLayout();
+    }
 
     private void ShowDetails(DashboardRow? row)
     {

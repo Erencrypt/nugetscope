@@ -5,6 +5,7 @@ using NugetScope.Tui.Formatting;
 using NugetScope.Tui.State;
 using NugetScope.Tui.Threading;
 using Terminal.Gui.App;
+using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -22,6 +23,7 @@ internal sealed class MainWindow : Window
     private readonly IReadOnlyList<PackagePage> _pages;
 
     private CancellationTokenSource? _loadCancellation;
+    private bool _tabHeadersStale;
     private readonly TextSpinner _spinner;
     private string _headerText = "";
 
@@ -37,6 +39,9 @@ internal sealed class MainWindow : Window
 
         HeaderText = Path.GetFileName(solutionPath);
 
+        // Only the top border line, which carries the title; the tabs frame already outlines the content.
+        Border.Thickness = new Thickness(0, 1, 0, 0);
+
         _pages = Enum.GetValues<PackageStatusFilter>().Select(status => new PackagePage(_state, status)).ToList();
 
         MenuBar menuBar = CreateMenuBar();
@@ -45,7 +50,15 @@ internal sealed class MainWindow : Window
         _tabs = new Tabs { X = 0, Y = Pos.Bottom(menuBar), Width = Dim.Fill(), Height = Dim.Fill(statusBar) };
         _tabs.Add([.. _pages]);
 
+        // Tabs gives each page a 1-cell left/right/bottom border (no setting for it); keep only the header rows on top.
+        // Verified to survive tab switches, reloads and resizes, with navigation unchanged.
+        foreach (PackagePage page in _pages)
+        {
+            page.Border.Thickness = page.Border.Thickness with { Left = 0, Right = 0, Bottom = 0 };
+        }
+
         Add(menuBar, _tabs, statusBar);
+        KeepTabHeadersInSync();
 
         Initialized += (_, _) =>
         {
@@ -85,6 +98,28 @@ internal sealed class MainWindow : Window
             : $"nugetscope - {_headerText}";
 
 
+    // Tabs positions its headers before the pages re-measure their titles, so after a title (count) changes the
+    // headers keep the old widths until the next layout, leaving artifacts. Lay Tabs out once more when that happens.
+    private void KeepTabHeadersInSync()
+    {
+        foreach (PackagePage page in _pages)
+        {
+            page.TitleChanged += (_, _) => _tabHeadersStale = true;
+        }
+
+        _tabs.SubViewsLaidOut += (_, _) =>
+        {
+            if (!_tabHeadersStale)
+            {
+                return;
+            }
+
+            _tabHeadersStale = false;
+            _tabs.SetNeedsLayout();
+            _tabs.Layout();
+        };
+    }
+
     private MenuBar CreateMenuBar() => new(
     [
         new MenuBarItem("_File",
@@ -96,6 +131,7 @@ internal sealed class MainWindow : Window
         new MenuBarItem("_View",
         [
             new MenuItem("_Search", "Search this tab", () => CurrentPage.FocusSearch(), Key.F.WithCtrl),
+            new MenuItem("_Details", "Focus the details, or go back to the list", () => CurrentPage.ToggleDetailsFocus(), Key.O.WithCtrl),
             new MenuItem("_Group", "Switch between by package and by project", _state.ToggleGrouping, Key.G.WithCtrl),
             new MenuItem("_Next tab", "Select the next tab", SelectNextTab, Key.F3),
             .. _pages.Select(page => new MenuItem(
@@ -111,6 +147,7 @@ internal sealed class MainWindow : Window
         new Shortcut(Key.F5, "Reload", StartLoad),
         new Shortcut(Key.F3, "Next tab", SelectNextTab),
         new Shortcut(Key.F.WithCtrl, "Search", () => CurrentPage.FocusSearch()),
+        new Shortcut(Key.O.WithCtrl, "Details", () => CurrentPage.ToggleDetailsFocus()),
         new Shortcut(Key.G.WithCtrl, "Group", _state.ToggleGrouping),
         new Shortcut(Key.P.WithCtrl, "Problems", ShowProblems),
         new Shortcut(Key.Q.WithCtrl, "Quit", RequestStop),

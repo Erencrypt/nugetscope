@@ -36,7 +36,7 @@ internal sealed class PackagePanel : FrameView
         Title = StatusFormatter.Describe(PackageGrouping.ByPackage);
 
         var searchLabel = new Label { Text = "Search:", X = 0, Y = 1 };
-        _search = new TextField { X = Pos.Right(searchLabel) + 1, Y = 1, Width = Dim.Fill() - 1 };
+        _search = new TextField { X = Pos.Right(searchLabel) + 1, Y = 1, Width = Dim.Fill() };
         _search.ValueChanged += (_, _) => SearchTextChanged?.Invoke(this, _search.Text);
         _search.KeyDown += (_, key) =>
         {
@@ -52,12 +52,17 @@ internal sealed class PackagePanel : FrameView
         _table = new TableView(_source)
         {
             X = 0,
-            Y = Pos.Bottom(_search),
+            Y = Pos.Bottom(_search) + 1,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             FullRowSelect = true,
         };
         _table.Style.GetOrCreateColumnStyle(StatusColumn).ColorGetter = GetStatusCellScheme;
+
+        // The panel frame already surrounds the table: drop the table's own top, left and right edges.
+        _table.Style.ShowHorizontalHeaderOverline = false;
+        _table.Style.ShowVerticalCellLineForFirstColumn = false;
+        _table.Style.ShowVerticalCellLineForLastColumn = false;
         _table.ValueChanged += (_, _) => SelectedRowChanged?.Invoke(this, SelectedRow);
 
         Add(searchLabel, _search, _table);

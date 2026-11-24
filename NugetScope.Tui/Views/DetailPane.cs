@@ -42,6 +42,8 @@ internal sealed class DetailPane : FrameView
 
     public void ShowText(string text) => ShowLines(DetailLine.FromText(text));
 
+    public void FocusList() => _list.SetFocus();
+
     private void OnRowRender(object? sender, ListViewRowEventArgs args)
     {
         // Leave the selected line alone so the theme's selection highlight stays visible.
