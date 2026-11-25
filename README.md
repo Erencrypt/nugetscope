@@ -204,6 +204,8 @@ nugetscope relies on the official tools rather than reimplementing NuGet:
 
 The UI is built with [Terminal.Gui](https://github.com/tui-cs/Terminal.Gui) v2.
 
+For the details of how updates find and edit versions, and how the possibly-unused check decides, see [docs/how-it-works.md](https://github.com/Erencrypt/nugetscope/blob/main/docs/how-it-works.md).
+
 ## Building and testing
 
 ```sh
