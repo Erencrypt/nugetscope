@@ -221,4 +221,4 @@ Tests use xunit.v3 on Microsoft.Testing.Platform with captured CLI output, so th
 
 ## License
 
-[MIT](https://github.com/Erencrypt/nugetscope/blob/main/LICENSE). Versions up to 0.1.0 were released under GPL-3.0.
+[MIT](https://github.com/Erencrypt/nugetscope/blob/main/LICENSE).
