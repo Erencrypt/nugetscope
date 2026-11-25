@@ -1,5 +1,9 @@
 # nugetscope
 
+[![NuGet](https://img.shields.io/nuget/v/nugetscope.svg)](https://www.nuget.org/packages/nugetscope)
+[![CI](https://github.com/Erencrypt/nugetscope/actions/workflows/ci.yml/badge.svg)](https://github.com/Erencrypt/nugetscope/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Erencrypt/nugetscope/blob/main/LICENSE)
+
 An interactive, keyboard-driven terminal dashboard for the NuGet packages in a whole .NET solution.
 
 Point it at a `.sln` or `.slnx` and it shows every package used by every project: which are **outdated**, **vulnerable**, **deprecated**, or used at **mismatched versions** across projects. You can update them from the same screen, and it shows exactly which files will change before writing anything. It also runs headless in CI, printing a JSON or text report and returning a meaningful exit code.
@@ -217,4 +221,4 @@ Tests use xunit.v3 on Microsoft.Testing.Platform with captured CLI output, so th
 
 ## License
 
-[GPL-3.0](https://github.com/Erencrypt/nugetscope/blob/main/LICENSE)
+[MIT](https://github.com/Erencrypt/nugetscope/blob/main/LICENSE). Versions up to 0.1.0 were released under GPL-3.0.

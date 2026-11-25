@@ -1,4 +1,4 @@
-# Publishes nugetscope to nuget.org when a version tag (v1.2.3) is pushed.
+# Publishes nugetscope to nuget.org when a version tag (v1.2.3) is pushed, then creates a GitHub Release.
 # Uses nuget.org Trusted Publishing: no stored API key, only the NUGET_USER secret (nuget.org profile name).
 name: Publish
 
@@ -14,7 +14,7 @@ jobs:
       run:
         shell: bash
     permissions:
-      contents: read
+      contents: write # create the GitHub Release
       id-token: write # OIDC token for NuGet/login
 
     steps:
@@ -38,3 +38,12 @@ jobs:
 
       - name: Push
         run: dotnet nuget push out/*.nupkg --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json
+
+      # Release notes = this version's section of CHANGELOG.md (from its "## [x.y.z]" heading up to the next one).
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## \[/ { if (found) exit; found = index($0, "## [" v "]") == 1; next } found' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" out/*.nupkg --title "$GITHUB_REF_NAME" --notes-file notes.md
